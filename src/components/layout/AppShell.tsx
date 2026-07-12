@@ -1,27 +1,24 @@
-import { Outlet } from "react-router-dom";
-import type { SidebarItem } from "../../types/navigation";
+import type { ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
-import { Header } from "./Header";
 
 type AppShellProps = {
-  sidebarItems: SidebarItem[];
-  roleLabel: string;
+  isSidebarOpen: boolean;
+  onCloseSidebar: () => void;
+  children: ReactNode;
 };
 
-export function AppShell({ sidebarItems, roleLabel }: AppShellProps) {
+export function AppShell({
+  isSidebarOpen,
+  onCloseSidebar,
+  children,
+}: AppShellProps) {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="flex min-h-screen">
-        <Sidebar items={sidebarItems} />
+    <div className="flex h-screen overflow-hidden bg-[#0B0D10] text-slate-100">
+      <Sidebar isOpen={isSidebarOpen} onClose={onCloseSidebar} />
 
-        <div className="flex min-h-screen flex-1 flex-col">
-          <Header roleLabel={roleLabel} />
-
-          <main className="flex-1 p-6">
-            <Outlet />
-          </main>
-        </div>
-      </div>
+      <main className="h-screen flex-1 overflow-y-auto p-4 sm:p-5 lg:p-8">
+        {children}
+      </main>
     </div>
   );
 }
