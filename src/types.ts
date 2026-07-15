@@ -11,6 +11,7 @@ export type CurrentUser = {
 
 export type PageKey =
   | "dashboard"
+  | "brandPages"
   | "todo"
   | "production"
   | "calendar"
@@ -107,7 +108,11 @@ export type ContentIdea = {
 
 export type AssetType = "pdf" | "prompt" | "image" | "doc";
 
-export type AssetCategory = "pdf_brain" | "prompts" | "images" | "documents";
+export type AssetCategory =
+  | "pdf_brain"
+  | "prompts"
+  | "images"
+  | "documents";
 
 export type AssetItem = {
   id: string;
@@ -120,6 +125,21 @@ export type AssetItem = {
   imageUrl?: string;
   description: string;
   uploadedAt: string;
+};
+
+export type ContentPageStatus = "active" | "archived";
+
+export type ContentPageDbItem = {
+  id: string;
+  name: string;
+  platform: string;
+  page_url: string;
+  niche: string;
+  status: ContentPageStatus;
+  notes: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type ToDoStatus = "assigned" | "in_progress" | "done";
@@ -136,3 +156,50 @@ export type ToDoItem = {
   notes?: string;
   createdAt: string;
 };
+
+export type TodoDbStatus =
+  | "assigned"
+  | "in_progress"
+  | "submitted"
+  | "needs_revision"
+  | "approved"
+  | "done";
+
+export type TodoAssigneeProfile = {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  status: "active" | "disabled";
+};
+
+export type TodoContentPage = {
+  id: string;
+  name: string;
+  platform: string;
+  page_url: string;
+  niche: string;
+  status: ContentPageStatus;
+};
+
+export type TodoDbItem = {
+  id: string;
+  title: string;
+  brand: string;
+  content_page_id: string | null;
+  assignee_id: string | null;
+  created_by: string;
+  assign_to_all: boolean;
+  status: TodoDbStatus;
+  caption: string;
+  prompt_a: string;
+  prompt_b: string;
+  notes: string;
+  drive_url: string;
+  due_date: string | null;
+  created_at: string;
+  updated_at: string;
+  assignee?: TodoAssigneeProfile | null;
+  content_page?: TodoContentPage | null;
+};
+

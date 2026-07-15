@@ -1,4 +1,9 @@
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -7,22 +12,74 @@ import {
   CircleDot,
   Clock,
   Edit3,
+  Eye,
+  EyeOff,
+  LoaderCircle,
   Mail,
   Plus,
+  RefreshCw,
   Search,
   Shield,
+  ShieldCheck,
+  Trash2,
   UserCheck,
-  UserPlus,
+  UserRound,
   Users,
+  X,
   XCircle,
 } from "lucide-react";
 import { PageHeader } from "../components/common/PageHeader";
-import { employees, tasks } from "../data/mockData";
+import { useAuth } from "../context/AuthContext";
+import { tasks } from "../data/mockData";
+import { supabase } from "../lib/supabase";
+import {
+  createEmployee,
+  removeEmployee,
+  setEmployeeAccess,
+  updateEmployee,
+  type CreateEmployeeInput,
+  type UpdateEmployeeInput,
+} from "../services/employeeService";
 import type { Employee, Task, TaskStatus } from "../types";
 
 type EmployeesPageProps = {
   onOpenSidebar: () => void;
 };
+
+type ProfileStatus = "active" | "disabled";
+
+type ProfileRow = {
+  id: string;
+  email: string;
+  name: string;
+  role: "admin" | "employee";
+  status: ProfileStatus;
+  created_at: string;
+};
+
+type EmployeeView = Employee & {
+  email: string;
+  accessStatus: ProfileStatus;
+  createdAt: string;
+};
+
+type NoticeState = {
+  type: "success" | "error";
+  message: string;
+};
+
+type EmployeeFormModalProps =
+  | {
+      mode: "create";
+      onClose: () => void;
+      onSubmit: (input: CreateEmployeeInput) => Promise<void>;
+    }
+  | {
+      mode: "edit";
+      employee: EmployeeView;
+      onClose: () => void;
+      onSubmit: (input: UpdateEmployeeInput) => Promise<void>;
+    };
 
 const openTaskStatuses: TaskStatus[] = [
   "to_generate",
@@ -34,31 +91,96 @@ const openTaskStatuses: TaskStatus[] = [
 ];
 
 export function EmployeesPage({ onOpenSidebar }: EmployeesPageProps) {
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState(
-    employees[0]?.id ?? "",
-  );
+  const { currentUser } = useAuth();
+
+  const [employeeList, setEmployeeList] = useState<EmployeeView[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [search, setSearch] = useState("");
+  const [loadingEmployees, setLoadingEmployees] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [notice, setNotice] = useState<NoticeState | null>(null);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<EmployeeView | null>(
+    null,
+  );
+  const [busyEmployeeId, setBusyEmployeeId] = useState("");
+
+  async function loadEmployees() {
+    try {
+      setLoadingEmployees(true);
+      setLoadError("");
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, email, name, role, status, created_at")
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const rows = (data ?? []) as ProfileRow[];
+
+      const mappedEmployees = rows.map((profile) =>
+        mapProfileToEmployee(profile, currentUser?.id ?? ""),
+      );
+
+      setEmployeeList(mappedEmployees);
+
+      setSelectedEmployeeId((currentSelectedId) => {
+        if (
+          currentSelectedId &&
+          mappedEmployees.some((member) => member.id === currentSelectedId)
+        ) {
+          return currentSelectedId;
+        }
+
+        return mappedEmployees[0]?.id ?? "";
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to load team members.";
+
+      setLoadError(message);
+    } finally {
+      setLoadingEmployees(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadEmployees();
+  }, [currentUser?.id]);
 
   const filteredEmployees = useMemo(() => {
-    return employees.filter((employee) => {
-      const query = search.toLowerCase();
+    const query = search.trim().toLowerCase();
 
+    if (!query) {
+      return employeeList;
+    }
+
+    return employeeList.filter((member) => {
       return (
-        employee.name.toLowerCase().includes(query) ||
-        employee.role.toLowerCase().includes(query) ||
-        employee.status.toLowerCase().includes(query)
+        member.name.toLowerCase().includes(query) ||
+        member.email.toLowerCase().includes(query) ||
+        displayRole(member.role).toLowerCase().includes(query) ||
+        member.status.toLowerCase().includes(query) ||
+        member.accessStatus.toLowerCase().includes(query)
       );
     });
-  }, [search]);
+  }, [employeeList, search]);
 
   const selectedEmployee =
-    employees.find((employee) => employee.id === selectedEmployeeId) ??
+    employeeList.find((member) => member.id === selectedEmployeeId) ??
     filteredEmployees[0] ??
-    employees[0] ??
+    employeeList[0] ??
     null;
 
-  const onlineCount = employees.filter(
-    (employee) => employee.status === "Online",
+  const activeCount = employeeList.filter(
+    (member) => member.accessStatus === "active",
+  ).length;
+
+  const disabledCount = employeeList.filter(
+    (member) => member.accessStatus === "disabled",
   ).length;
 
   const openTasksCount = tasks.filter((task) =>
@@ -69,31 +191,147 @@ export function EmployeesPage({ onOpenSidebar }: EmployeesPageProps) {
     (task) => task.status === "submitted",
   ).length;
 
+  function showNotice(message: string, type: NoticeState["type"] = "success") {
+    setNotice({
+      message,
+      type,
+    });
+  }
+
+  async function handleCreateEmployee(input: CreateEmployeeInput) {
+    const created = await createEmployee(input);
+
+    showNotice(`${created.name} was added successfully.`);
+    setCreateModalOpen(false);
+    setSelectedEmployeeId(created.id);
+
+    await loadEmployees();
+  }
+
+  async function handleUpdateEmployee(input: UpdateEmployeeInput) {
+    const updated = await updateEmployee(input);
+
+    showNotice(`${updated.name} was updated successfully.`);
+    setEditingEmployee(null);
+    setSelectedEmployeeId(updated.id);
+
+    await loadEmployees();
+  }
+
+  async function handleSetAccess(member: EmployeeView, status: ProfileStatus) {
+    if (member.role === "Admin") {
+      showNotice("Admin accounts cannot be changed from this page.", "error");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      status === "disabled"
+        ? `Disable access for ${member.name}?`
+        : `Reactivate access for ${member.name}?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setBusyEmployeeId(member.id);
+
+      const updated = await setEmployeeAccess(member.id, status);
+
+      setEmployeeList((currentMembers) =>
+        currentMembers.map((currentMember) =>
+          currentMember.id === member.id
+            ? {
+                ...currentMember,
+                accessStatus: updated.status,
+              }
+            : currentMember,
+        ),
+      );
+
+      showNotice(
+        status === "disabled"
+          ? `${member.name} was disabled.`
+          : `${member.name} was reactivated.`,
+      );
+    } catch (error) {
+      showNotice(
+        error instanceof Error ? error.message : "Failed to update access.",
+        "error",
+      );
+    } finally {
+      setBusyEmployeeId("");
+    }
+  }
+
+  async function handleRemoveEmployee(member: EmployeeView) {
+    if (member.role === "Admin") {
+      showNotice("Admin accounts cannot be removed from this page.", "error");
+      return;
+    }
+
+    if (member.accessStatus !== "disabled") {
+      showNotice("Disable this member before removing permanently.", "error");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Permanently remove ${member.name}? This deletes the login account and profile.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setBusyEmployeeId(member.id);
+
+      await removeEmployee(member.id);
+
+      const remainingMembers = employeeList.filter(
+        (item) => item.id !== member.id,
+      );
+
+      setEmployeeList(remainingMembers);
+      setSelectedEmployeeId(remainingMembers[0]?.id ?? "");
+
+      showNotice(`${member.name} was permanently removed.`);
+    } catch (error) {
+      showNotice(
+        error instanceof Error ? error.message : "Failed to remove member.",
+        "error",
+      );
+    } finally {
+      setBusyEmployeeId("");
+    }
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
-        title="Employees"
-        description="Manage employee access, roles, online status, and assigned work summaries."
+        title="Team"
+        description="Add members, edit account details, manage access, and remove disabled users."
         onOpenSidebar={onOpenSidebar}
         accent="orange"
         pills={[
           {
             icon: Users,
-            value: employees.length,
-            label: "Total employees",
+            value: employeeList.length,
+            label: "Total members",
             accent: "orange",
           },
           {
             icon: UserCheck,
-            value: onlineCount,
-            label: "Online now",
+            value: activeCount,
+            label: "Active",
             accent: "emerald",
           },
           {
-            icon: Activity,
-            value: openTasksCount,
-            label: "Open tasks",
-            accent: "blue",
+            icon: XCircle,
+            value: disabledCount,
+            label: "Disabled",
+            accent: "amber",
           },
           {
             icon: CheckCircle2,
@@ -104,136 +342,185 @@ export function EmployeesPage({ onOpenSidebar }: EmployeesPageProps) {
         ]}
       />
 
+      {(loadError || notice) && (
+        <div className="mb-4">
+          {loadError ? (
+            <NoticeCard tone="error" title="Could not load team">
+              {loadError}
+            </NoticeCard>
+          ) : notice ? (
+            <NoticeCard tone={notice.type} title={notice.type}>
+              {notice.message}
+            </NoticeCard>
+          ) : null}
+        </div>
+      )}
+
       <section className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col rounded-2xl border border-white/10 bg-[#111318] p-4">
+        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-[#111318] p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-sm font-black uppercase tracking-wide text-slate-300">
-                Team
+                Members
               </h2>
               <p className="mt-1 text-xs text-slate-500">
-                Admin and employee accounts.
+                Admin and team member accounts.
               </p>
             </div>
 
-            <button
-              onClick={() => alert("Later: open register employee modal")}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500 text-white transition hover:bg-blue-400"
-              title="Register employee"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
+            <div className="flex shrink-0 gap-2">
+              <button
+                onClick={() => void loadEmployees()}
+                disabled={loadingEmployees}
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                title="Refresh"
+              >
+                <RefreshCw
+                  className={[
+                    "h-4 w-4",
+                    loadingEmployees ? "animate-spin" : "",
+                  ].join(" ")}
+                />
+              </button>
+
+              <button
+                onClick={() => {
+                  setCreateModalOpen(true);
+                  setNotice(null);
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500 text-white transition hover:bg-blue-400"
+                title="Add member"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
-          <div className="mb-4 flex items-center gap-2 rounded-xl border border-white/10 bg-[#0B0D10] px-3 py-2.5">
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-white/10 bg-[#0B0D10] px-3 py-2.5">
             <Search className="h-4 w-4 shrink-0 text-slate-500" />
 
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search employees..."
+              placeholder="Search team..."
               className="w-full min-w-0 bg-transparent text-sm text-slate-300 outline-none placeholder:text-slate-600"
             />
           </div>
 
           <div className="scroll-panel min-h-0 flex-1 overflow-y-auto pr-1">
-            {filteredEmployees.length === 0 ? (
-              <EmptyEmployees />
+            {loadingEmployees ? (
+              <LoadingEmployees />
+            ) : filteredEmployees.length === 0 ? (
+              <EmptyMembers />
             ) : (
               <div className="space-y-3">
-                {filteredEmployees.map((employee) => {
-                  const selected = selectedEmployee?.id === employee.id;
-
-                  return (
-                    <EmployeeListCard
-                      key={employee.id}
-                      employee={employee}
-                      selected={selected}
-                      onClick={() => setSelectedEmployeeId(employee.id)}
-                    />
-                  );
-                })}
+                {filteredEmployees.map((member) => (
+                  <MemberListCard
+                    key={member.id}
+                    member={member}
+                    selected={selectedEmployee?.id === member.id}
+                    onClick={() => setSelectedEmployeeId(member.id)}
+                  />
+                ))}
               </div>
             )}
           </div>
         </aside>
 
-        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#111318]">
+        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#111318]">
           {selectedEmployee ? (
-            <EmployeeDetail employee={selectedEmployee} />
+            <MemberDetail
+              member={selectedEmployee}
+              busyEmployeeId={busyEmployeeId}
+              openTasksCount={openTasksCount}
+              onEdit={setEditingEmployee}
+              onSetAccess={handleSetAccess}
+              onRemove={handleRemoveEmployee}
+            />
           ) : (
             <div className="flex flex-1 items-center justify-center p-10 text-center">
               <div>
                 <Users className="mx-auto h-10 w-10 text-slate-600" />
                 <p className="mt-3 font-semibold text-white">
-                  Select an employee
+                  Select a member
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
-                  Employee profile and work summary will appear here.
+                  Member profile and work summary will appear here.
                 </p>
               </div>
             </div>
           )}
         </main>
       </section>
+
+      {createModalOpen && (
+        <MemberFormModal
+          mode="create"
+          onClose={() => setCreateModalOpen(false)}
+          onSubmit={handleCreateEmployee}
+        />
+      )}
+
+      {editingEmployee && (
+        <MemberFormModal
+          mode="edit"
+          employee={editingEmployee}
+          onClose={() => setEditingEmployee(null)}
+          onSubmit={handleUpdateEmployee}
+        />
+      )}
     </div>
   );
 }
 
-function EmployeeListCard({
-  employee,
+function MemberListCard({
+  member,
   selected,
   onClick,
 }: {
-  employee: Employee;
+  member: EmployeeView;
   selected: boolean;
   onClick: () => void;
 }) {
-  const isOnline = employee.status === "Online";
-  const isAdmin = employee.role === "Admin";
+  const isAdmin = member.role === "Admin";
+  const isDisabled = member.accessStatus === "disabled";
 
   return (
     <button
       onClick={onClick}
       className={[
-        "group relative flex min-h-[104px] w-full items-center overflow-hidden rounded-2xl border p-4 text-left transition-all",
+        "group relative flex min-h-[96px] w-full items-center overflow-hidden rounded-xl border p-4 text-left transition",
         selected
-          ? "border-orange-500/45 bg-orange-500/[0.07] ring-1 ring-orange-500/35"
-          : "border-white/10 bg-[#0B0D10] hover:border-white/20 hover:bg-[#14171d]",
+          ? "border-orange-500/45 bg-orange-500/[0.07] ring-1 ring-orange-500/30"
+          : "border-white/10 bg-[#0B0D10] hover:border-white/20 hover:bg-[#14171D]",
+        isDisabled ? "opacity-70" : "",
       ].join(" ")}
     >
       <span
         className={[
           "absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b",
-          isOnline
-            ? "from-emerald-400 via-emerald-500 to-green-600"
-            : "from-slate-500 via-slate-600 to-slate-700",
+          isDisabled
+            ? "from-red-400 via-red-500 to-red-600"
+            : isAdmin
+              ? "from-orange-400 via-orange-500 to-amber-600"
+              : "from-blue-400 via-blue-500 to-violet-600",
         ].join(" ")}
       />
 
       <div className="absolute right-4 top-4">
-        <StatusBadge status={employee.status} />
+        <AccessStatusBadge status={member.accessStatus} />
       </div>
 
       <div className="flex min-w-0 items-center gap-4 pr-24">
-        <div
-          className={[
-            "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-sm font-black text-white shadow-lg",
-            isAdmin
-              ? "bg-orange-500 shadow-orange-500/20"
-              : "bg-blue-500 shadow-blue-500/20",
-          ].join(" ")}
-        >
-          {getInitials(employee.name)}
-        </div>
+        <MemberAvatar role={member.role} size="sm" />
 
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-base font-black leading-tight text-white">
-            {employee.name}
+            {member.name}
           </h3>
 
           <p className="mt-1 truncate text-sm font-medium text-slate-500">
-            {employee.role}
+            {displayRole(member.role)}
           </p>
         </div>
       </div>
@@ -241,67 +528,113 @@ function EmployeeListCard({
   );
 }
 
-function EmployeeDetail({ employee }: { employee: Employee }) {
-  const summary = getEmployeeTaskSummary(employee.name);
-  const assignedTasks = tasks.filter((task) => task.assignee === employee.name);
+function MemberDetail({
+  member,
+  busyEmployeeId,
+  openTasksCount,
+  onEdit,
+  onSetAccess,
+  onRemove,
+}: {
+  member: EmployeeView;
+  busyEmployeeId: string;
+  openTasksCount: number;
+  onEdit: (member: EmployeeView) => void;
+  onSetAccess: (member: EmployeeView, status: ProfileStatus) => Promise<void>;
+  onRemove: (member: EmployeeView) => Promise<void>;
+}) {
+  const summary = getEmployeeTaskSummary(member.name);
+  const assignedTasks = tasks.filter((task) => task.assignee === member.name);
+  const isAdmin = member.role === "Admin";
+  const isBusy = busyEmployeeId === member.id;
+  const isDisabled = member.accessStatus === "disabled";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 border-b border-white/10 bg-[#111318] p-5">
         <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-500 text-lg font-black text-white shadow-lg shadow-blue-500/20">
-              {getInitials(employee.name)}
-            </div>
+            <MemberAvatar role={member.role} size="lg" />
 
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="break-words text-2xl font-black leading-tight text-white">
-                  {employee.name}
+                  {member.name}
                 </h2>
 
-                <RoleBadge role={employee.role} />
-                <StatusBadge status={employee.status} />
+                <RoleBadge role={member.role} />
+                <AccessStatusBadge status={member.accessStatus} />
               </div>
 
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-400">
                 <div className="flex min-w-0 items-center gap-2">
                   <Mail className="h-4 w-4 shrink-0 text-slate-500" />
-                  <span className="truncate">{makeEmployeeEmail(employee)}</span>
+                  <span className="truncate">{member.email}</span>
                 </div>
 
                 <div className="flex min-w-0 items-center gap-2">
                   <Clock className="h-4 w-4 shrink-0 text-slate-500" />
-                  <span className="truncate">Last seen {employee.lastSeen}</span>
+                  <span className="truncate">Created {member.createdAt}</span>
                 </div>
               </div>
             </div>
           </div>
 
           <div className="flex shrink-0 flex-wrap gap-2">
-            <button
-              onClick={() => alert("Later: edit employee modal")}
-              className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2 text-sm font-bold text-slate-300 transition hover:bg-white/[0.06] hover:text-white"
-            >
-              <Edit3 className="h-4 w-4" />
-              Edit
-            </button>
+            {!isAdmin && (
+              <button
+                onClick={() => onEdit(member)}
+                className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2 text-sm font-bold text-slate-300 transition hover:bg-white/[0.06] hover:text-white"
+              >
+                <Edit3 className="h-4 w-4" />
+                Edit
+              </button>
+            )}
 
-            <button
-              onClick={() => alert("Later: assign task to this employee")}
-              className="flex items-center gap-2 rounded-xl bg-blue-500 px-3.5 py-2 text-sm font-bold text-white transition hover:bg-blue-400"
-            >
-              <UserPlus className="h-4 w-4" />
-              Assign Task
-            </button>
+            {!isAdmin && !isDisabled && (
+              <button
+                onClick={() => void onSetAccess(member, "disabled")}
+                disabled={isBusy}
+                className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3.5 py-2 text-sm font-bold text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isBusy ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                ) : (
+                  <XCircle className="h-4 w-4" />
+                )}
+                Disable
+              </button>
+            )}
 
-            <button
-              onClick={() => alert("Later: deactivate employee access")}
-              className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3.5 py-2 text-sm font-bold text-red-300 transition hover:bg-red-500/20"
-            >
-              <XCircle className="h-4 w-4" />
-              Deactivate
-            </button>
+            {!isAdmin && isDisabled && (
+              <>
+                <button
+                  onClick={() => void onSetAccess(member, "active")}
+                  disabled={isBusy}
+                  className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-2 text-sm font-bold text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isBusy ? (
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <UserCheck className="h-4 w-4" />
+                  )}
+                  Reactivate
+                </button>
+
+                <button
+                  onClick={() => void onRemove(member)}
+                  disabled={isBusy}
+                  className="flex items-center gap-2 rounded-lg border border-red-500/25 bg-red-500/15 px-3.5 py-2 text-sm font-black text-red-200 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isBusy ? (
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Remove
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -338,18 +671,18 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
         </div>
 
         <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_330px]">
-          <section className="min-w-0 rounded-2xl border border-white/10 bg-[#0B0D10] p-5">
+          <section className="min-w-0 rounded-xl border border-white/10 bg-[#0B0D10] p-5">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-base font-black text-white">
                   Assigned Work
                 </h3>
                 <p className="mt-1 max-w-md text-sm leading-relaxed text-slate-500">
-                  Current and recent production items assigned to this employee.
+                  Current and recent production items assigned to this member.
                 </p>
               </div>
 
-              <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-black text-slate-300">
+              <span className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 py-1 text-xs font-black text-slate-300">
                 {assignedTasks.length} items
               </span>
             </div>
@@ -362,8 +695,7 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
                     No assigned work yet
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
-                    Assign a production item to this employee to start tracking
-                    work.
+                    Task assignment will connect after the To Do database.
                   </p>
                 </div>
               </div>
@@ -376,46 +708,267 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
             )}
           </section>
 
-          <aside className="rounded-2xl border border-white/10 bg-[#0B0D10] p-5">
+          <aside className="rounded-xl border border-white/10 bg-[#0B0D10] p-5">
             <h3 className="text-base font-black text-white">Access Control</h3>
             <p className="mt-1 text-sm leading-relaxed text-slate-500">
-              Quick account and permission overview.
+              Real access is controlled by Supabase Auth and profiles.
             </p>
 
             <div className="mt-4 space-y-3">
               <AccessItem
                 icon={Shield}
                 label="Role"
-                value={employee.role}
-                tone={employee.role === "Admin" ? "orange" : "blue"}
+                value={displayRole(member.role)}
+                tone={member.role === "Admin" ? "orange" : "blue"}
               />
 
               <AccessItem
                 icon={UserCheck}
                 label="Account Status"
-                value="Active"
-                tone="emerald"
+                value={capitalize(member.accessStatus)}
+                tone={member.accessStatus === "active" ? "emerald" : "red"}
               />
 
               <AccessItem
-                icon={Clock}
-                label="Presence"
-                value={employee.status}
-                tone={employee.status === "Online" ? "emerald" : "slate"}
+                icon={Activity}
+                label="All Open Tasks"
+                value={String(openTasksCount)}
+                tone="slate"
               />
             </div>
 
-            <div className="mt-5 rounded-xl border border-orange-500/15 bg-orange-500/[0.05] p-4">
-              <p className="text-sm font-black text-orange-200">MVP Note</p>
+            <div className="mt-5 rounded-lg border border-orange-500/15 bg-orange-500/[0.05] p-4">
+              <p className="text-sm font-black text-orange-200">
+                Remove Rule
+              </p>
               <p className="mt-2 text-sm leading-relaxed text-slate-400">
-                Later, this page will connect to Supabase Auth for real employee
-                registration, role updates, and account disabling.
+                Disable first, then remove. This avoids accidental permanent
+                deletion.
               </p>
             </div>
           </aside>
         </div>
       </div>
     </div>
+  );
+}
+
+function MemberFormModal(props: EmployeeFormModalProps) {
+  const { mode, onClose, onSubmit } = props;
+
+  const [form, setForm] = useState({
+    name: mode === "edit" ? props.employee.name : "",
+    email: mode === "edit" ? props.employee.email : "",
+    password: "",
+  });
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    try {
+      setSaving(true);
+      setError("");
+
+      if (mode === "edit") {
+        await onSubmit({
+          id: props.employee.id,
+          name: form.name,
+          email: form.email,
+          password: form.password || undefined,
+        });
+      } else {
+        await onSubmit({
+          name: form.name,
+          email: form.email,
+          password: form.password,
+        });
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Request failed.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg overflow-hidden rounded-xl border border-white/10 bg-[#111318] shadow-2xl shadow-black/50">
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 p-6">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-300">
+              {mode === "create" ? "New Member" : "Edit Member"}
+            </p>
+
+            <h2 className="mt-2 text-2xl font-black text-white">
+              {mode === "create" ? "Add team member" : "Update member account"}
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              {mode === "create"
+                ? "This creates a real login account and profile."
+                : "Change name, email, or set a new password."}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <X className="h-4.5 w-4.5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6">
+          <div className="space-y-4">
+            <TextField
+              label="Member Name"
+              value={form.name}
+              placeholder="Example: Maria"
+              onChange={(value) =>
+                setForm((current) => ({ ...current, name: value }))
+              }
+            />
+
+            <TextField
+              label="Member Email"
+              value={form.email}
+              placeholder="member@email.com"
+              onChange={(value) =>
+                setForm((current) => ({ ...current, email: value }))
+              }
+            />
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-300">
+                {mode === "create"
+                  ? "Temporary Password"
+                  : "New Password Optional"}
+              </span>
+
+              <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-[#0B0D10] px-4 py-3.5 transition focus-within:border-blue-500/70">
+                <input
+                  value={form.password}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      password: event.target.value,
+                    }))
+                  }
+                  type={showPassword ? "text" : "password"}
+                  placeholder={
+                    mode === "create"
+                      ? "At least 8 characters"
+                      : "Leave blank to keep current password"
+                  }
+                  className="w-full bg-transparent text-sm font-semibold text-white outline-none placeholder:text-slate-600"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  className="shrink-0 text-slate-500 transition hover:text-white"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4.5 w-4.5" />
+                  ) : (
+                    <Eye className="h-4.5 w-4.5" />
+                  )}
+                </button>
+              </div>
+            </label>
+          </div>
+
+          {error && (
+            <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm font-semibold text-red-300">
+              {error}
+            </div>
+          )}
+
+          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-black text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving && <LoaderCircle className="h-4 w-4 animate-spin" />}
+              {saving
+                ? "Saving..."
+                : mode === "create"
+                  ? "Add Member"
+                  : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function MemberAvatar({
+  role,
+  size,
+}: {
+  role: EmployeeView["role"];
+  size: "sm" | "lg";
+}) {
+  const Icon = role === "Admin" ? ShieldCheck : UserRound;
+
+  return (
+    <div
+      className={[
+        "shrink-0 border text-white shadow-lg",
+        role === "Admin"
+          ? "border-orange-400/25 bg-orange-500 shadow-orange-500/20"
+          : "border-blue-400/25 bg-blue-500 shadow-blue-500/20",
+        size === "lg"
+          ? "flex h-14 w-14 items-center justify-center rounded-xl"
+          : "flex h-12 w-12 items-center justify-center rounded-xl",
+      ].join(" ")}
+    >
+      <Icon className={size === "lg" ? "h-6 w-6" : "h-5 w-5"} />
+    </div>
+  );
+}
+
+function TextField({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-bold text-slate-300">
+        {label}
+      </span>
+
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-white/10 bg-[#0B0D10] px-4 py-3.5 text-sm font-semibold text-white outline-none transition placeholder:text-slate-600 focus:border-blue-500/70"
+      />
+    </label>
   );
 }
 
@@ -438,11 +991,11 @@ function SummaryCard({
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0B0D10] p-4">
+    <div className="rounded-xl border border-white/10 bg-[#0B0D10] p-4">
       <div className="flex items-center justify-between gap-3">
         <div
           className={[
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border",
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
             styles[accent],
           ].join(" ")}
         >
@@ -459,7 +1012,7 @@ function SummaryCard({
 
 function TaskRow({ task }: { task: Task }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-[#111318] p-4">
+    <div className="rounded-lg border border-white/10 bg-[#111318] p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h4 className="truncate text-sm font-black text-white">
@@ -475,11 +1028,8 @@ function TaskRow({ task }: { task: Task }) {
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-        <span className="rounded-full bg-white/5 px-2.5 py-1">
-          {task.brand}
-        </span>
-
-        <span className="rounded-full bg-white/5 px-2.5 py-1">
+        <span className="rounded-lg bg-white/5 px-2.5 py-1">{task.brand}</span>
+        <span className="rounded-lg bg-white/5 px-2.5 py-1">
           Due {task.due}
         </span>
       </div>
@@ -496,17 +1046,18 @@ function AccessItem({
   icon: LucideIcon;
   label: string;
   value: string;
-  tone: "orange" | "blue" | "emerald" | "slate";
+  tone: "orange" | "blue" | "emerald" | "slate" | "red";
 }) {
   const styles = {
     orange: "text-orange-300 bg-orange-500/10 border-orange-500/20",
     blue: "text-blue-300 bg-blue-500/10 border-blue-500/20",
     emerald: "text-emerald-300 bg-emerald-500/10 border-emerald-500/20",
     slate: "text-slate-300 bg-white/5 border-white/10",
+    red: "text-red-300 bg-red-500/10 border-red-500/20",
   };
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#111318] p-3">
+    <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-[#111318] p-3">
       <div
         className={[
           "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
@@ -524,7 +1075,7 @@ function AccessItem({
   );
 }
 
-function RoleBadge({ role }: { role: Employee["role"] }) {
+function RoleBadge({ role }: { role: EmployeeView["role"] }) {
   const style =
     role === "Admin"
       ? "border-orange-500/20 bg-orange-500/10 text-orange-300"
@@ -533,35 +1084,29 @@ function RoleBadge({ role }: { role: Employee["role"] }) {
   return (
     <span
       className={[
-        "rounded-full border px-2.5 py-1 text-xs font-black",
+        "rounded-lg border px-2.5 py-1 text-xs font-black",
         style,
       ].join(" ")}
     >
-      {role}
+      {displayRole(role)}
     </span>
   );
 }
 
-function StatusBadge({ status }: { status: Employee["status"] }) {
+function AccessStatusBadge({ status }: { status: ProfileStatus }) {
   const style =
-    status === "Online"
+    status === "active"
       ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-      : "border-white/10 bg-white/5 text-slate-400";
+      : "border-red-500/20 bg-red-500/10 text-red-300";
 
   return (
     <span
       className={[
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-black",
+        "rounded-lg border px-2.5 py-1 text-xs font-black",
         style,
       ].join(" ")}
     >
-      <span
-        className={[
-          "h-1.5 w-1.5 rounded-full",
-          status === "Online" ? "bg-emerald-400" : "bg-slate-500",
-        ].join(" ")}
-      />
-      {status}
+      {capitalize(status)}
     </span>
   );
 }
@@ -570,7 +1115,7 @@ function TaskStatusBadge({ status }: { status: TaskStatus }) {
   return (
     <span
       className={[
-        "shrink-0 rounded-full border px-2.5 py-1 text-xs font-black",
+        "shrink-0 rounded-lg border px-2.5 py-1 text-xs font-black",
         taskStatusStyle(status),
       ].join(" ")}
     >
@@ -579,16 +1124,51 @@ function TaskStatusBadge({ status }: { status: TaskStatus }) {
   );
 }
 
-function EmptyEmployees() {
+function EmptyMembers() {
   return (
     <div className="flex min-h-[260px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-[#0B0D10] p-8 text-center">
       <div>
         <Users className="mx-auto h-10 w-10 text-slate-600" />
-        <p className="mt-3 font-semibold text-white">No employees found</p>
+        <p className="mt-3 font-semibold text-white">No members found</p>
         <p className="mt-1 text-sm text-slate-500">
-          Try a different search or register a new employee.
+          Try another search or add a new member.
         </p>
       </div>
+    </div>
+  );
+}
+
+function LoadingEmployees() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div
+          key={index}
+          className="h-[96px] animate-pulse rounded-xl border border-white/10 bg-[#0B0D10]"
+        />
+      ))}
+    </div>
+  );
+}
+
+function NoticeCard({
+  tone,
+  title,
+  children,
+}: {
+  tone: "success" | "error";
+  title: string;
+  children: string;
+}) {
+  const style =
+    tone === "error"
+      ? "border-red-500/20 bg-red-500/10 text-red-300"
+      : "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
+
+  return (
+    <div className={["rounded-xl border p-4", style].join(" ")}>
+      <p className="text-sm font-black capitalize">{title}</p>
+      <p className="mt-1 text-sm font-semibold opacity-90">{children}</p>
     </div>
   );
 }
@@ -597,7 +1177,6 @@ function getEmployeeTaskSummary(employeeName: string) {
   const assigned = tasks.filter((task) => task.assignee === employeeName);
 
   return {
-    total: assigned.length,
     open: assigned.filter((task) => openTaskStatuses.includes(task.status))
       .length,
     submitted: assigned.filter((task) => task.status === "submitted").length,
@@ -654,15 +1233,36 @@ function taskStatusStyle(status: TaskStatus) {
   }
 }
 
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+function mapProfileToEmployee(
+  profile: ProfileRow,
+  currentUserId: string,
+): EmployeeView {
+  const isCurrentUser = profile.id === currentUserId;
+
+  return {
+    id: profile.id,
+    name: profile.name,
+    email: profile.email,
+    role: profile.role === "admin" ? "Admin" : "Employee",
+    status: isCurrentUser ? "Online" : "Offline",
+    accessStatus: profile.status,
+    lastSeen: isCurrentUser ? "now" : "not tracked",
+    createdAt: formatDate(profile.created_at),
+  };
 }
 
-function makeEmployeeEmail(employee: Employee) {
-  return `${employee.name.toLowerCase().replaceAll(" ", ".")}@adistudios.local`;
+function displayRole(role: EmployeeView["role"]) {
+  return role === "Admin" ? "Admin" : "Member";
+}
+
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
 }

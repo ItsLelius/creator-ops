@@ -1,65 +1,269 @@
-import { useMemo, useState } from "react";
 import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import {
+  CalendarDays,
   CheckCircle2,
   Copy,
+  Edit3,
   FileText,
   ListTodo,
+  LoaderCircle,
   Plus,
   Search,
-  User,
+  Trash2,
+  UserRound,
+  Users,
+  X,
 } from "lucide-react";
 import { PageHeader } from "../components/common/PageHeader";
-import { toDoItems } from "../data/mockToDoData";
-import type { CurrentUser, ToDoItem, ToDoStatus } from "../types";
+import { getActiveContentPages } from "../services/contentPageService";
+import {
+  createTodoItem,
+  deleteTodoItem,
+  getAssignablePeople,
+  getTodoItems,
+  updateTodoItem,
+  updateTodoStatus,
+  type CreateTodoInput,
+  type TeamMemberOption,
+  type UpdateTodoInput,
+} from "../services/todoService";
+import type {
+  ContentPageDbItem,
+  CurrentUser,
+  TodoDbItem,
+  TodoDbStatus,
+  UserRole,
+} from "../types";
 
 type ToDoListPageProps = {
   onOpenSidebar: () => void;
   currentUser: CurrentUser;
 };
 
+type NoticeState = {
+  type: "success" | "error";
+  message: string;
+};
+
+type ConfirmState = {
+  title: string;
+  description: string;
+  actionLabel: string;
+  tone: "blue" | "red";
+  onConfirm: () => Promise<void>;
+};
+
+type TodoFormModalProps =
+  | {
+      mode: "create";
+      pages: ContentPageDbItem[];
+      people: TeamMemberOption[];
+      onClose: () => void;
+      onSubmit: (input: CreateTodoInput) => Promise<void>;
+    }
+  | {
+      mode: "edit";
+      item: TodoDbItem;
+      pages: ContentPageDbItem[];
+      people: TeamMemberOption[];
+      onClose: () => void;
+      onSubmit: (input: UpdateTodoInput) => Promise<void>;
+    };
+
+const EVERYONE_ASSIGNEE_ID = "__everyone__";
+
+const statusOptions: TodoDbStatus[] = [
+  "assigned",
+  "in_progress",
+  "submitted",
+  "needs_revision",
+  "approved",
+  "done",
+];
+
 export function ToDoListPage({
   onOpenSidebar,
   currentUser,
 }: ToDoListPageProps) {
-  const [selectedToDoId, setSelectedToDoId] = useState(toDoItems[0]?.id ?? "");
+  const isAdmin = currentUser.role === "admin";
+
+  const [items, setItems] = useState<TodoDbItem[]>([]);
+  const [pages, setPages] = useState<ContentPageDbItem[]>([]);
+  const [people, setPeople] = useState<TeamMemberOption[]>([]);
+  const [selectedItemId, setSelectedItemId] = useState("");
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState<NoticeState | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<TodoDbItem | null>(null);
+  const [busyItemId, setBusyItemId] = useState("");
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
-  const visibleItems = useMemo(() => {
-    if (currentUser.role === "admin") {
-      return toDoItems;
+  async function loadData() {
+    try {
+      setLoading(true);
+      setLoadError("");
+
+      const todoItems = await getTodoItems();
+      const activePages = isAdmin ? await getActiveContentPages() : [];
+      const assignablePeople = isAdmin ? await getAssignablePeople() : [];
+
+      setItems(todoItems);
+      setPages(activePages);
+      setPeople(assignablePeople);
+
+      setSelectedItemId((currentSelectedId) => {
+        if (
+          currentSelectedId &&
+          todoItems.some((item) => item.id === currentSelectedId)
+        ) {
+          return currentSelectedId;
+        }
+
+        return todoItems[0]?.id ?? "";
+      });
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Failed to load To Do List.",
+      );
+    } finally {
+      setLoading(false);
     }
+  }
 
-    return toDoItems.filter((item) => item.assignee === currentUser.name);
-  }, [currentUser]);
+  useEffect(() => {
+    void loadData();
+  }, [currentUser.id, currentUser.role]);
 
   const filteredItems = useMemo(() => {
-    return visibleItems.filter((item) => {
-      const query = search.toLowerCase();
+    const query = search.trim().toLowerCase();
 
+    if (!query) {
+      return items;
+    }
+
+    return items.filter((item) => {
       return (
         item.title.toLowerCase().includes(query) ||
-        item.brand.toLowerCase().includes(query) ||
-        item.assignee.toLowerCase().includes(query)
+        pageName(item).toLowerCase().includes(query) ||
+        assigneeName(item).toLowerCase().includes(query) ||
+        statusLabel(item.status).toLowerCase().includes(query)
       );
     });
-  }, [search, visibleItems]);
+  }, [items, search]);
 
   const selectedItem =
-    filteredItems.find((item) => item.id === selectedToDoId) ??
+    items.find((item) => item.id === selectedItemId) ??
     filteredItems[0] ??
+    items[0] ??
     null;
 
-  const assignedCount = visibleItems.filter(
-    (item) => item.status === "assigned",
-  ).length;
+  const assignedCount = items.filter((item) => item.status === "assigned")
+    .length;
 
-  const inProgressCount = visibleItems.filter(
+  const inProgressCount = items.filter(
     (item) => item.status === "in_progress",
   ).length;
 
-  const doneCount = visibleItems.filter((item) => item.status === "done").length;
+  const doneCount = items.filter((item) => item.status === "done").length;
 
-  const isAdmin = currentUser.role === "admin";
+  function showNotice(message: string, type: NoticeState["type"] = "success") {
+    setNotice({
+      message,
+      type,
+    });
+  }
+
+  async function handleCreateTodo(input: CreateTodoInput) {
+    await createTodoItem(input);
+
+    showNotice("Work item created successfully.");
+    setCreateModalOpen(false);
+
+    await loadData();
+  }
+
+  async function handleUpdateTodo(input: UpdateTodoInput) {
+    await updateTodoItem(input);
+
+    showNotice("Work item updated successfully.");
+    setEditingItem(null);
+    setSelectedItemId(input.id);
+
+    await loadData();
+  }
+
+  function handleMarkDone(item: TodoDbItem) {
+    setConfirm({
+      title: "Mark this work as done?",
+      description: `"${item.title}" will be marked as done. You can still edit it later if needed.`,
+      actionLabel: "Mark Done",
+      tone: "blue",
+      onConfirm: () => executeMarkDone(item),
+    });
+  }
+
+  async function executeMarkDone(item: TodoDbItem) {
+    try {
+      setBusyItemId(item.id);
+
+      await updateTodoStatus(item.id, "done");
+
+      showNotice("Work item marked as done.");
+      setConfirm(null);
+
+      await loadData();
+    } catch (error) {
+      showNotice(
+        error instanceof Error ? error.message : "Failed to update status.",
+        "error",
+      );
+    } finally {
+      setBusyItemId("");
+    }
+  }
+
+  function handleDeleteTodo(item: TodoDbItem) {
+    setConfirm({
+      title: "Delete this work item?",
+      description: `"${item.title}" will be permanently removed from the To Do List. This action cannot be undone.`,
+      actionLabel: "Delete Work",
+      tone: "red",
+      onConfirm: () => executeDeleteTodo(item),
+    });
+  }
+
+  async function executeDeleteTodo(item: TodoDbItem) {
+    try {
+      setBusyItemId(item.id);
+
+      await deleteTodoItem(item.id);
+
+      const remainingItems = items.filter(
+        (currentItem) => currentItem.id !== item.id,
+      );
+
+      setItems(remainingItems);
+      setSelectedItemId(remainingItems[0]?.id ?? "");
+      setConfirm(null);
+
+      showNotice("Work item deleted successfully.");
+    } catch (error) {
+      showNotice(
+        error instanceof Error ? error.message : "Failed to delete item.",
+        "error",
+      );
+    } finally {
+      setBusyItemId("");
+    }
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -67,15 +271,15 @@ export function ToDoListPage({
         title={isAdmin ? "To Do List" : "My To Do List"}
         description={
           isAdmin
-            ? "All assigned content containers with caption, Prompt A, and Prompt B."
-            : "Your assigned content containers with caption, Prompt A, and Prompt B."
+            ? "Create clean work instructions, assign them to a person or everyone, and manage production copy."
+            : "View your assigned work and copy the production instructions."
         }
         onOpenSidebar={onOpenSidebar}
         accent="blue"
         pills={[
           {
             icon: ListTodo,
-            value: visibleItems.length,
+            value: items.length,
             label: "Total items",
             accent: "blue",
           },
@@ -86,7 +290,7 @@ export function ToDoListPage({
             accent: "violet",
           },
           {
-            icon: User,
+            icon: UserRound,
             value: inProgressCount,
             label: "In progress",
             accent: "amber",
@@ -100,45 +304,63 @@ export function ToDoListPage({
         ]}
       />
 
-      <section className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col rounded-2xl border border-white/10 bg-[#111318] p-5">
+      {(loadError || notice) && (
+        <div className="mb-4">
+          {loadError ? (
+            <NoticeCard tone="error" title="Could not load To Do List">
+              {loadError}
+            </NoticeCard>
+          ) : notice ? (
+            <NoticeCard tone={notice.type} title={notice.type}>
+              {notice.message}
+            </NoticeCard>
+          ) : null}
+        </div>
+      )}
+
+      <section className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
+        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-[#111318] p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-bold uppercase tracking-wide text-slate-400">
-                Assigned Items
+              <h2 className="text-sm font-black uppercase tracking-wide text-slate-300">
+                Work Queue
               </h2>
+
               <p className="mt-1 text-xs text-slate-500">
-                {isAdmin
-                  ? "All worker instruction containers."
-                  : "Only items assigned to you."}
+                {isAdmin ? "All assigned production work." : "Assigned to you."}
               </p>
             </div>
 
             {isAdmin && (
               <button
-                onClick={() => alert("Later: create new To Do item")}
-                className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500 text-white transition hover:bg-blue-400"
-                title="New To Do"
+                onClick={() => {
+                  setCreateModalOpen(true);
+                  setNotice(null);
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500 text-white transition hover:bg-blue-400"
+                title="Create work item"
               >
                 <Plus className="h-4 w-4" />
               </button>
             )}
           </div>
 
-          <div className="mb-4 flex items-center gap-2 rounded-xl border border-white/10 bg-[#0B0D10] px-3 py-2.5">
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-white/10 bg-[#0B0D10] px-3 py-2.5">
             <Search className="h-4 w-4 shrink-0 text-slate-500" />
 
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search to-do items..."
-              className="w-full min-w-0 bg-transparent text-sm text-slate-300 outline-none placeholder:text-slate-600"
+              placeholder="Search work..."
+              className="w-full min-w-0 bg-transparent text-sm font-semibold text-slate-300 outline-none placeholder:text-slate-600"
             />
           </div>
 
           <div className="scroll-panel min-h-0 flex-1 overflow-y-auto pr-1">
-            {filteredItems.length === 0 ? (
-              <EmptyToDoList />
+            {loading ? (
+              <LoadingTodoItems />
+            ) : filteredItems.length === 0 ? (
+              <EmptyToDoList isAdmin={isAdmin} />
             ) : (
               <div className="space-y-3">
                 {filteredItems.map((item) => (
@@ -146,7 +368,7 @@ export function ToDoListPage({
                     key={item.id}
                     item={item}
                     selected={selectedItem?.id === item.id}
-                    onClick={() => setSelectedToDoId(item.id)}
+                    onClick={() => setSelectedItemId(item.id)}
                   />
                 ))}
               </div>
@@ -154,15 +376,22 @@ export function ToDoListPage({
           </div>
         </aside>
 
-        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#111318]">
+        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#111318]">
           {selectedItem ? (
-            <ToDoViewer item={selectedItem} isAdmin={isAdmin} />
+            <ToDoViewer
+              item={selectedItem}
+              isAdmin={isAdmin}
+              busyItemId={busyItemId}
+              onEdit={setEditingItem}
+              onMarkDone={handleMarkDone}
+              onDelete={handleDeleteTodo}
+            />
           ) : (
             <div className="flex flex-1 items-center justify-center p-10 text-center">
               <div>
                 <ListTodo className="mx-auto h-10 w-10 text-slate-600" />
                 <p className="mt-3 font-semibold text-white">
-                  Select a To Do item
+                  Select a work item
                 </p>
                 <p className="mt-1 text-sm text-slate-500">
                   Caption, Prompt A, and Prompt B will appear here.
@@ -172,6 +401,35 @@ export function ToDoListPage({
           )}
         </main>
       </section>
+
+      {createModalOpen && (
+        <TodoFormModal
+          mode="create"
+          pages={pages}
+          people={people}
+          onClose={() => setCreateModalOpen(false)}
+          onSubmit={handleCreateTodo}
+        />
+      )}
+
+      {editingItem && (
+        <TodoFormModal
+          mode="edit"
+          item={editingItem}
+          pages={pages}
+          people={people}
+          onClose={() => setEditingItem(null)}
+          onSubmit={handleUpdateTodo}
+        />
+      )}
+
+      {confirm && (
+        <ConfirmModal
+          confirm={confirm}
+          busy={Boolean(busyItemId)}
+          onClose={() => setConfirm(null)}
+        />
+      )}
     </div>
   );
 }
@@ -181,7 +439,7 @@ function ToDoCard({
   selected,
   onClick,
 }: {
-  item: ToDoItem;
+  item: TodoDbItem;
   selected: boolean;
   onClick: () => void;
 }) {
@@ -189,34 +447,38 @@ function ToDoCard({
     <button
       onClick={onClick}
       className={[
-        "group relative w-full overflow-hidden rounded-2xl border p-4 text-left transition-all",
+        "group relative w-full overflow-hidden rounded-xl border p-4 text-left transition",
         selected
           ? "border-blue-500/45 bg-blue-500/[0.065] ring-1 ring-blue-500/30"
-          : "border-white/10 bg-[#0B0D10] hover:border-white/20 hover:bg-[#14171d]",
+          : "border-white/10 bg-[#0B0D10] hover:border-white/20 hover:bg-[#14171D]",
       ].join(" ")}
     >
       <span
         className={[
           "absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b",
-          brandGradient(item.brand),
+          brandGradient(pageName(item)),
         ].join(" ")}
       />
 
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge status={item.status} />
 
-        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-bold text-slate-300">
-          {item.brand}
+        <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-black text-slate-300">
+          {pageName(item)}
         </span>
       </div>
 
-      <h3 className="mt-3 line-clamp-2 text-sm font-bold leading-snug text-white">
+      <h3 className="mt-3 line-clamp-2 text-sm font-black leading-snug text-white">
         {item.title}
       </h3>
 
-      <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-        <User className="h-3.5 w-3.5" />
-        {item.assignee}
+      <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+        {item.assign_to_all ? (
+          <Users className="h-3.5 w-3.5" />
+        ) : (
+          <UserRound className="h-3.5 w-3.5" />
+        )}
+        {assigneeName(item)}
       </p>
     </button>
   );
@@ -225,65 +487,108 @@ function ToDoCard({
 function ToDoViewer({
   item,
   isAdmin,
+  busyItemId,
+  onEdit,
+  onMarkDone,
+  onDelete,
 }: {
-  item: ToDoItem;
+  item: TodoDbItem;
   isAdmin: boolean;
+  busyItemId: string;
+  onEdit: (item: TodoDbItem) => void;
+  onMarkDone: (item: TodoDbItem) => void;
+  onDelete: (item: TodoDbItem) => void;
 }) {
+  const isBusy = busyItemId === item.id;
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b border-white/10 bg-[#111318] p-6">
+      <div className="border-b border-white/10 bg-[#111318] p-5">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status={item.status} />
 
-              <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-bold text-slate-300">
-                {item.brand}
+              <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-black text-slate-300">
+                {pageName(item)}
               </span>
 
-              <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-bold text-slate-300">
-                {item.createdAt}
+              <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-black text-slate-300">
+                Created {formatDate(item.created_at)}
               </span>
+
+              {item.due_date && (
+                <span className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-black text-slate-300">
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  Due {formatDate(item.due_date)}
+                </span>
+              )}
             </div>
 
             <h2 className="mt-3 break-words text-3xl font-black leading-tight text-white">
               {item.title}
             </h2>
 
-            <p className="mt-3 flex items-center gap-2 text-sm text-slate-400">
-              <User className="h-4 w-4 text-slate-500" />
-              Assigned to {item.assignee}
+            <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-slate-400">
+              {item.assign_to_all ? (
+                <Users className="h-4 w-4 text-slate-500" />
+              ) : (
+                <UserRound className="h-4 w-4 text-slate-500" />
+              )}
+              Assigned to {assigneeName(item)}
             </p>
           </div>
 
-          <div className="flex shrink-0 flex-wrap gap-2">
-            {isAdmin && (
+          {isAdmin && (
+            <div className="flex shrink-0 flex-wrap gap-2">
               <button
-                onClick={() => alert("Later: edit To Do item")}
-                className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-bold text-slate-300 transition hover:bg-white/[0.06] hover:text-white"
+                onClick={() => onEdit(item)}
+                className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-bold text-slate-300 transition hover:bg-white/[0.06] hover:text-white"
               >
+                <Edit3 className="h-4 w-4" />
                 Edit
               </button>
-            )}
 
-            <button
-              onClick={() => alert("Later: update item status")}
-              className="rounded-xl bg-blue-500 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-400"
-            >
-              {isAdmin ? "Mark Done" : "Done"}
-            </button>
-          </div>
+              {item.status !== "done" && (
+                <button
+                  onClick={() => onMarkDone(item)}
+                  disabled={isBusy}
+                  className="flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isBusy ? (
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4" />
+                  )}
+                  Mark Done
+                </button>
+              )}
+
+              <button
+                onClick={() => onDelete(item)}
+                disabled={isBusy}
+                className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm font-bold text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isBusy ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Delete
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="scroll-panel min-h-0 flex-1 overflow-y-auto p-6">
+      <div className="scroll-panel min-h-0 flex-1 overflow-y-auto p-5">
         <div className="mx-auto max-w-5xl space-y-5">
           <CopyBlock label="Caption" value={item.caption} tone="blue" />
-          <CopyBlock label="Prompt A" value={item.promptA} tone="violet" />
-          <CopyBlock label="Prompt B" value={item.promptB} tone="emerald" />
+          <CopyBlock label="Prompt A" value={item.prompt_a} tone="violet" />
+          <CopyBlock label="Prompt B" value={item.prompt_b} tone="emerald" />
 
           {item.notes && (
-            <div className="rounded-2xl border border-amber-500/15 bg-amber-500/[0.055] p-5">
+            <div className="rounded-xl border border-amber-500/15 bg-amber-500/[0.055] p-5">
               <p className="text-xs font-black uppercase tracking-wide text-amber-300">
                 Notes
               </p>
@@ -293,6 +598,389 @@ function ToDoViewer({
               </p>
             </div>
           )}
+
+          {item.drive_url && (
+            <div className="rounded-xl border border-blue-500/15 bg-blue-500/[0.055] p-5">
+              <p className="text-xs font-black uppercase tracking-wide text-blue-300">
+                Drive Link
+              </p>
+
+              <p className="mt-3 break-words text-sm leading-7 text-slate-200">
+                {item.drive_url}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TodoFormModal(props: TodoFormModalProps) {
+  const { mode, pages, people, onClose, onSubmit } = props;
+
+  const initialAssigneeId =
+    mode === "edit"
+      ? props.item.assign_to_all
+        ? EVERYONE_ASSIGNEE_ID
+        : props.item.assignee_id ?? ""
+      : EVERYONE_ASSIGNEE_ID;
+
+  const initialContentPageId =
+    mode === "edit"
+      ? props.item.content_page_id ?? pages[0]?.id ?? ""
+      : pages[0]?.id ?? "";
+
+  const [form, setForm] = useState<{
+    title: string;
+    contentPageId: string;
+    assigneeId: string;
+    caption: string;
+    promptA: string;
+    promptB: string;
+    notes: string;
+    dueDate: string;
+    status: TodoDbStatus;
+  }>({
+    title: mode === "edit" ? props.item.title : "",
+    contentPageId: initialContentPageId,
+    assigneeId: initialAssigneeId,
+    caption: mode === "edit" ? props.item.caption : "",
+    promptA: mode === "edit" ? props.item.prompt_a : "",
+    promptB: mode === "edit" ? props.item.prompt_b : "",
+    notes: mode === "edit" ? props.item.notes : "",
+    dueDate: mode === "edit" ? props.item.due_date ?? "" : "",
+    status: mode === "edit" ? props.item.status : "assigned",
+  });
+
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    try {
+      setSaving(true);
+      setError("");
+
+      if (!form.title.trim()) {
+        throw new Error("Title is required.");
+      }
+
+      if (!form.contentPageId) {
+        throw new Error("Choose a brand page.");
+      }
+
+      const assignToAll = form.assigneeId === EVERYONE_ASSIGNEE_ID;
+
+      if (!assignToAll && !form.assigneeId) {
+        throw new Error("Choose who this work is assigned to.");
+      }
+
+      if (mode === "edit") {
+        await onSubmit({
+          id: props.item.id,
+          title: form.title,
+          contentPageId: form.contentPageId,
+          assigneeId: assignToAll ? "" : form.assigneeId,
+          assignToAll,
+          caption: form.caption,
+          promptA: form.promptA,
+          promptB: form.promptB,
+          notes: form.notes,
+          dueDate: form.dueDate,
+          status: form.status,
+        });
+      } else {
+        await onSubmit({
+          title: form.title,
+          contentPageId: form.contentPageId,
+          assigneeId: assignToAll ? "" : form.assigneeId,
+          assignToAll,
+          caption: form.caption,
+          promptA: form.promptA,
+          promptB: form.promptB,
+          notes: form.notes,
+          dueDate: form.dueDate,
+        });
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Request failed.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-xl border border-white/10 bg-[#111318] shadow-2xl shadow-black/50">
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 p-6">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-300">
+              {mode === "create" ? "New Work Item" : "Edit Work Item"}
+            </p>
+
+            <h2 className="mt-2 text-2xl font-black text-white">
+              {mode === "create" ? "Create assigned work" : "Update work item"}
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              Choose the brand page, assign the work, then add caption and
+              prompts.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <X className="h-4.5 w-4.5" />
+          </button>
+        </div>
+
+        <form
+          onSubmit={handleSubmit}
+          className="scroll-panel max-h-[calc(92vh-130px)] overflow-y-auto p-6"
+        >
+          <div className="rounded-xl border border-white/10 bg-[#0B0D10] p-4">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+              Work Setup
+            </p>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <TextField
+                label="Title"
+                value={form.title}
+                placeholder="Example: Garlic Bread Rolls"
+                onChange={(value) =>
+                  setForm((current) => ({ ...current, title: value }))
+                }
+              />
+
+              <SelectField
+                label="Brand Page"
+                value={form.contentPageId}
+                onChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    contentPageId: value,
+                  }))
+                }
+              >
+                <option value="">Choose brand page</option>
+
+                {pages.map((page) => (
+                  <option key={page.id} value={page.id}>
+                    {page.name}
+                  </option>
+                ))}
+              </SelectField>
+
+              <SelectField
+                label="Assign To"
+                value={form.assigneeId}
+                onChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    assigneeId: value,
+                  }))
+                }
+              >
+                <option value={EVERYONE_ASSIGNEE_ID}>Everyone</option>
+
+                {people.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.name} — {roleLabel(person.role)}
+                  </option>
+                ))}
+              </SelectField>
+
+              <label className="block">
+                <span className="mb-2 block text-sm font-bold text-slate-300">
+                  Due Date
+                </span>
+
+                <input
+                  value={form.dueDate}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      dueDate: event.target.value,
+                    }))
+                  }
+                  type="date"
+                  className="w-full rounded-lg border border-white/10 bg-[#111318] px-4 py-3.5 text-sm font-semibold text-white outline-none transition focus:border-blue-500/70"
+                />
+              </label>
+
+              {mode === "edit" && (
+                <SelectField
+                  label="Status"
+                  value={form.status}
+                  onChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      status: value as TodoDbStatus,
+                    }))
+                  }
+                  className="md:col-span-2"
+                >
+                  {statusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {statusLabel(status)}
+                    </option>
+                  ))}
+                </SelectField>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-white/10 bg-[#0B0D10] p-4">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+              Production Copy
+            </p>
+
+            <div className="mt-4 space-y-4">
+              <TextArea
+                label="Caption"
+                value={form.caption}
+                placeholder="Paste the caption here..."
+                rows={4}
+                onChange={(value) =>
+                  setForm((current) => ({ ...current, caption: value }))
+                }
+              />
+
+              <TextArea
+                label="Prompt A"
+                value={form.promptA}
+                placeholder="Paste image prompt here..."
+                rows={6}
+                onChange={(value) =>
+                  setForm((current) => ({ ...current, promptA: value }))
+                }
+              />
+
+              <TextArea
+                label="Prompt B"
+                value={form.promptB}
+                placeholder="Paste animation prompt here..."
+                rows={6}
+                onChange={(value) =>
+                  setForm((current) => ({ ...current, promptB: value }))
+                }
+              />
+
+              <TextArea
+                label="Notes"
+                value={form.notes}
+                placeholder="Optional notes..."
+                rows={3}
+                onChange={(value) =>
+                  setForm((current) => ({ ...current, notes: value }))
+                }
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm font-semibold text-red-300">
+              {error}
+            </div>
+          )}
+
+          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-black text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving && <LoaderCircle className="h-4 w-4 animate-spin" />}
+              {saving
+                ? "Saving..."
+                : mode === "create"
+                  ? "Create Work"
+                  : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmModal({
+  confirm,
+  busy,
+  onClose,
+}: {
+  confirm: ConfirmState;
+  busy: boolean;
+  onClose: () => void;
+}) {
+  const toneStyle = {
+    blue: "border-blue-500/20 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20",
+    red: "border-red-500/25 bg-red-500/15 text-red-200 hover:bg-red-500/25",
+  };
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#111318] p-6 shadow-2xl shadow-black/50">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+              Confirm Action
+            </p>
+
+            <h3 className="mt-2 text-2xl font-black leading-tight text-white">
+              {confirm.title}
+            </h3>
+          </div>
+
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <X className="h-4.5 w-4.5" />
+          </button>
+        </div>
+
+        <p className="mt-4 text-sm leading-7 text-slate-400">
+          {confirm.description}
+        </p>
+
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-black text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={() => void confirm.onConfirm()}
+            disabled={busy}
+            className={[
+              "flex items-center justify-center gap-2 rounded-lg border px-5 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60",
+              toneStyle[confirm.tone],
+            ].join(" ")}
+          >
+            {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
+            {busy ? "Working..." : confirm.actionLabel}
+          </button>
         </div>
       </div>
     </div>
@@ -308,8 +996,10 @@ function CopyBlock({
   value: string;
   tone: "blue" | "violet" | "emerald";
 }) {
+  const canCopy = Boolean(value.trim());
+
   return (
-    <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#0B0D10]">
+    <section className="overflow-hidden rounded-xl border border-white/10 bg-[#0B0D10]">
       <div
         className={[
           "flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4",
@@ -321,8 +1011,9 @@ function CopyBlock({
         </p>
 
         <button
-          onClick={() => navigator.clipboard.writeText(value)}
-          className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-white/[0.1]"
+          onClick={() => void navigator.clipboard.writeText(value)}
+          disabled={!canCopy}
+          className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Copy className="h-3.5 w-3.5" />
           Copy
@@ -331,32 +1022,105 @@ function CopyBlock({
 
       <div className="p-5">
         <p className="whitespace-pre-wrap break-words text-[15px] leading-8 text-slate-200">
-          {value}
+          {value || "Nothing added yet."}
         </p>
       </div>
     </section>
   );
 }
 
-function EmptyToDoList() {
+function TextField({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
   return (
-    <div className="flex min-h-[260px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-[#0B0D10] p-8 text-center">
-      <div>
-        <ListTodo className="mx-auto h-10 w-10 text-slate-600" />
-        <p className="mt-3 font-semibold text-white">No To Do items found</p>
-        <p className="mt-1 text-sm text-slate-500">
-          Try a different search or create a new assigned item.
-        </p>
-      </div>
-    </div>
+    <label className="block">
+      <span className="mb-2 block text-sm font-bold text-slate-300">
+        {label}
+      </span>
+
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-white/10 bg-[#111318] px-4 py-3.5 text-sm font-semibold text-white outline-none transition placeholder:text-slate-600 focus:border-blue-500/70"
+      />
+    </label>
   );
 }
 
-function StatusBadge({ status }: { status: ToDoStatus }) {
+function SelectField({
+  label,
+  value,
+  children,
+  className = "",
+  onChange,
+}: {
+  label: string;
+  value: string;
+  children: ReactNode;
+  className?: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className={["block", className].join(" ")}>
+      <span className="mb-2 block text-sm font-bold text-slate-300">
+        {label}
+      </span>
+
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-lg border border-white/10 bg-[#111318] px-4 py-3.5 text-sm font-semibold text-white outline-none transition focus:border-blue-500/70"
+      >
+        {children}
+      </select>
+    </label>
+  );
+}
+
+function TextArea({
+  label,
+  value,
+  placeholder,
+  rows,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  rows: number;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-bold text-slate-300">
+        {label}
+      </span>
+
+      <textarea
+        value={value}
+        rows={rows}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="w-full resize-y rounded-lg border border-white/10 bg-[#111318] px-4 py-3.5 text-sm font-semibold leading-7 text-white outline-none transition placeholder:text-slate-600 focus:border-blue-500/70"
+      />
+    </label>
+  );
+}
+
+function StatusBadge({ status }: { status: TodoDbStatus }) {
   return (
     <span
       className={[
-        "rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide",
+        "rounded-lg border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide",
         statusStyle(status),
       ].join(" ")}
     >
@@ -365,12 +1129,85 @@ function StatusBadge({ status }: { status: ToDoStatus }) {
   );
 }
 
-function statusLabel(status: ToDoStatus) {
+function NoticeCard({
+  tone,
+  title,
+  children,
+}: {
+  tone: "success" | "error";
+  title: string;
+  children: string;
+}) {
+  const style =
+    tone === "error"
+      ? "border-red-500/20 bg-red-500/10 text-red-300"
+      : "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
+
+  return (
+    <div className={["rounded-xl border p-4", style].join(" ")}>
+      <p className="text-sm font-black capitalize">{title}</p>
+      <p className="mt-1 text-sm font-semibold opacity-90">{children}</p>
+    </div>
+  );
+}
+
+function EmptyToDoList({ isAdmin }: { isAdmin: boolean }) {
+  return (
+    <div className="flex min-h-[260px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-[#0B0D10] p-8 text-center">
+      <div>
+        <ListTodo className="mx-auto h-10 w-10 text-slate-600" />
+        <p className="mt-3 font-semibold text-white">No work items found</p>
+        <p className="mt-1 text-sm text-slate-500">
+          {isAdmin
+            ? "Create a new assigned work item to start."
+            : "No work has been assigned to you yet."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function LoadingTodoItems() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div
+          key={index}
+          className="h-[112px] animate-pulse rounded-xl border border-white/10 bg-[#0B0D10]"
+        />
+      ))}
+    </div>
+  );
+}
+
+function pageName(item: TodoDbItem) {
+  return item.content_page?.name ?? item.brand;
+}
+
+function assigneeName(item: TodoDbItem) {
+  if (item.assign_to_all) {
+    return "Everyone";
+  }
+
+  return item.assignee?.name ?? "Unassigned";
+}
+
+function roleLabel(role: UserRole) {
+  return role === "admin" ? "Admin" : "Member";
+}
+
+function statusLabel(status: TodoDbStatus) {
   switch (status) {
     case "assigned":
       return "Assigned";
     case "in_progress":
       return "In Progress";
+    case "submitted":
+      return "Submitted";
+    case "needs_revision":
+      return "Needs Revision";
+    case "approved":
+      return "Approved";
     case "done":
       return "Done";
     default:
@@ -378,21 +1215,27 @@ function statusLabel(status: ToDoStatus) {
   }
 }
 
-function statusStyle(status: ToDoStatus) {
+function statusStyle(status: TodoDbStatus) {
   switch (status) {
     case "assigned":
       return "border-blue-500/20 bg-blue-500/10 text-blue-300";
     case "in_progress":
       return "border-amber-500/20 bg-amber-500/10 text-amber-300";
-    case "done":
+    case "submitted":
+      return "border-violet-500/20 bg-violet-500/10 text-violet-300";
+    case "needs_revision":
+      return "border-red-500/20 bg-red-500/10 text-red-300";
+    case "approved":
       return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
+    case "done":
+      return "border-green-500/20 bg-green-500/10 text-green-300";
     default:
       return "border-white/10 bg-white/5 text-slate-300";
   }
 }
 
-function brandGradient(brand: string) {
-  switch (brand) {
+function brandGradient(name: string) {
+  switch (name) {
     case "Maya's Kitchen":
       return "from-emerald-400 via-emerald-500 to-green-600";
     case "Chef Marrow":
@@ -415,4 +1258,12 @@ function toneHeader(tone: "blue" | "violet" | "emerald") {
     default:
       return "bg-white/5";
   }
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
 }

@@ -3,6 +3,7 @@ import {
   ClipboardList,
   FolderOpen,
   LayoutDashboard,
+  Layers,
   Lightbulb,
   ListTodo,
   Upload,
@@ -14,6 +15,7 @@ import type { SidebarItem } from "../types";
 
 export const adminSidebarItems: SidebarItem[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { key: "brandPages", label: "Brand Pages", icon: Layers },
   { key: "todo", label: "To Do List", icon: ListTodo },
   { key: "production", label: "Production Board", icon: ClipboardList },
   { key: "calendar", label: "Calendar", icon: Calendar },
@@ -21,7 +23,7 @@ export const adminSidebarItems: SidebarItem[] = [
   { key: "published", label: "Published Content", icon: Video },
   { key: "ideas", label: "Content Ideas", icon: Lightbulb },
   { key: "assets", label: "Asset Library", icon: FolderOpen },
-  { key: "employees", label: "Employees", icon: Users },
+  { key: "employees", label: "Team", icon: Users },
 ];
 
 export const employeeSidebarItems: SidebarItem[] = [

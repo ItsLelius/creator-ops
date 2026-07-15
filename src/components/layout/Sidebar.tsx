@@ -1,4 +1,4 @@
-import { ChevronDown, LogOut, X } from "lucide-react";
+import { ChevronDown, LogOut, UserCircle, X } from "lucide-react";
 import { useState } from "react";
 import type { CurrentUser, PageKey, SidebarItem } from "../../types";
 
@@ -9,6 +9,7 @@ type SidebarProps = {
   onPageChange: (page: PageKey) => void;
   items: SidebarItem[];
   currentUser: CurrentUser;
+  onLogout: () => void;
 };
 
 export function Sidebar({
@@ -18,12 +19,20 @@ export function Sidebar({
   onPageChange,
   items,
   currentUser,
+  onLogout,
 }: SidebarProps) {
   const [profileOpen, setProfileOpen] = useState(false);
 
   function handlePageChange(page: PageKey) {
     onPageChange(page);
+    setProfileOpen(false);
     onClose();
+  }
+
+  function handleLogout() {
+    setProfileOpen(false);
+    onClose();
+    onLogout();
   }
 
   return (
@@ -44,7 +53,7 @@ export function Sidebar({
       >
         <div className="flex h-full min-h-0 flex-col p-4">
           <div className="mb-7 flex items-center gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-[#0B0D10] text-sm font-black text-white">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-[#0B0D10] text-sm font-black text-white shadow-lg shadow-black/20">
               AS
             </div>
 
@@ -58,6 +67,7 @@ export function Sidebar({
             <button
               onClick={onClose}
               className="rounded-lg p-2 text-slate-500 transition hover:bg-white/5 hover:text-white lg:hidden"
+              aria-label="Close navigation"
             >
               <X className="h-5 w-5" />
             </button>
@@ -83,7 +93,7 @@ export function Sidebar({
                     <Icon
                       className={[
                         "h-4.5 w-4.5 shrink-0 transition",
-                        active ? "text-white" : "text-slate-500",
+                        active ? "text-white" : "text-slate-500 group-hover:text-slate-300",
                       ].join(" ")}
                     />
 
@@ -92,7 +102,7 @@ export function Sidebar({
                     </span>
 
                     {active && (
-                      <span className="h-7 w-1 rounded-full bg-blue-500" />
+                      <span className="h-7 w-1 shrink-0 rounded-full bg-blue-500 shadow-lg shadow-blue-500/40" />
                     )}
                   </button>
                 );
@@ -102,17 +112,18 @@ export function Sidebar({
 
           <div className="mt-4 border-t border-white/10 pt-4">
             {profileOpen && (
-              <div className="mb-3 overflow-hidden rounded-xl border border-white/10 bg-[#0B0D10] p-2">
+              <div className="mb-3 overflow-hidden rounded-xl border border-white/10 bg-[#0B0D10] p-2 shadow-xl shadow-black/20">
                 <button
                   onClick={() => handlePageChange("profile")}
-                  className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-slate-300 transition hover:bg-white/5 hover:text-white"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-slate-300 transition hover:bg-white/5 hover:text-white"
                 >
+                  <UserCircle className="h-4 w-4 text-slate-500" />
                   My Profile
                 </button>
 
                 <button
-                  onClick={() => alert("Later: logout")}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-red-300 transition hover:bg-red-500/10"
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-red-300 transition hover:bg-red-500/10"
                 >
                   <LogOut className="h-4 w-4" />
                   Logout
@@ -124,7 +135,7 @@ export function Sidebar({
               onClick={() => setProfileOpen((value) => !value)}
               className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-[#171A21] p-3 text-left transition hover:bg-[#1E222B]"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-500 text-sm font-black text-white">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-500 text-sm font-black text-white shadow-lg shadow-blue-500/20">
                 {getInitials(currentUser.name)}
               </div>
 
@@ -139,7 +150,7 @@ export function Sidebar({
 
               <ChevronDown
                 className={[
-                  "h-4 w-4 text-slate-500 transition",
+                  "h-4 w-4 shrink-0 text-slate-500 transition",
                   profileOpen ? "rotate-180" : "",
                 ].join(" ")}
               />

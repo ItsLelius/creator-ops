@@ -9,6 +9,7 @@ type AppShellProps = {
   onPageChange: (page: PageKey) => void;
   sidebarItems: SidebarItem[];
   currentUser: CurrentUser;
+  onLogout: () => void;
   children: ReactNode;
 };
 
@@ -19,6 +20,7 @@ export function AppShell({
   onPageChange,
   sidebarItems,
   currentUser,
+  onLogout,
   children,
 }: AppShellProps) {
   return (
@@ -30,6 +32,7 @@ export function AppShell({
         onPageChange={onPageChange}
         items={sidebarItems}
         currentUser={currentUser}
+        onLogout={onLogout}
       />
 
       <main className="h-screen min-w-0 flex-1 overflow-y-auto p-4 sm:p-5 lg:p-8">
