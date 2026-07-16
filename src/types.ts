@@ -163,8 +163,9 @@ export type TodoDbStatus =
   | "submitted"
   | "needs_revision"
   | "approved"
-  | "done";
-
+  | "done"
+  | "posted";
+  
 export type TodoAssigneeProfile = {
   id: string;
   name: string;

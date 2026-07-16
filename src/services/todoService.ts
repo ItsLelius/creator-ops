@@ -200,6 +200,25 @@ export async function updateTodoStatus(id: string, status: TodoDbStatus) {
   return data;
 }
 
+export async function updateTodoDriveUrl(id: string, driveUrl: string) {
+  const cleanDriveUrl = driveUrl.trim();
+
+  if (!cleanDriveUrl) {
+    throw new Error("Drive link is required.");
+  }
+
+  const { data, error } = await supabase.rpc("submit_todo_work", {
+    target_todo_id: id,
+    submitted_drive_url: cleanDriveUrl,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
 export async function deleteTodoItem(id: string) {
   const { error } = await supabase.from("todo_items").delete().eq("id", id);
 

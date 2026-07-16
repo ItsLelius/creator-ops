@@ -20,7 +20,7 @@ export const adminSidebarItems: SidebarItem[] = [
   { key: "production", label: "Production Board", icon: ClipboardList },
   { key: "calendar", label: "Calendar", icon: Calendar },
   { key: "ready", label: "Ready to Upload", icon: Upload },
-  { key: "published", label: "Published Content", icon: Video },
+  { key: "published", label: "Uploaded Content", icon: Video },
   { key: "ideas", label: "Content Ideas", icon: Lightbulb },
   { key: "assets", label: "Asset Library", icon: FolderOpen },
   { key: "employees", label: "Team", icon: Users },

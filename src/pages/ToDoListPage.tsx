@@ -6,8 +6,8 @@ import {
   type ReactNode,
 } from "react";
 import {
+  AlertTriangle,
   CalendarDays,
-  CheckCircle2,
   Copy,
   Edit3,
   FileText,
@@ -28,7 +28,6 @@ import {
   getAssignablePeople,
   getTodoItems,
   updateTodoItem,
-  updateTodoStatus,
   type CreateTodoInput,
   type TeamMemberOption,
   type UpdateTodoInput,
@@ -55,7 +54,7 @@ type ConfirmState = {
   title: string;
   description: string;
   actionLabel: string;
-  tone: "blue" | "red";
+  tone: "red";
   onConfirm: () => Promise<void>;
 };
 
@@ -78,13 +77,10 @@ type TodoFormModalProps =
 
 const EVERYONE_ASSIGNEE_ID = "__everyone__";
 
-const statusOptions: TodoDbStatus[] = [
+const activeStatusOptions: TodoDbStatus[] = [
   "assigned",
   "in_progress",
-  "submitted",
   "needs_revision",
-  "approved",
-  "done",
 ];
 
 export function ToDoListPage({
@@ -111,23 +107,24 @@ export function ToDoListPage({
       setLoading(true);
       setLoadError("");
 
-      const todoItems = await getTodoItems();
+      const allTodoItems = await getTodoItems();
+      const activeTodoItems = allTodoItems.filter(isActiveTodoItem);
       const activePages = isAdmin ? await getActiveContentPages() : [];
       const assignablePeople = isAdmin ? await getAssignablePeople() : [];
 
-      setItems(todoItems);
+      setItems(activeTodoItems);
       setPages(activePages);
       setPeople(assignablePeople);
 
       setSelectedItemId((currentSelectedId) => {
         if (
           currentSelectedId &&
-          todoItems.some((item) => item.id === currentSelectedId)
+          activeTodoItems.some((item) => item.id === currentSelectedId)
         ) {
           return currentSelectedId;
         }
 
-        return todoItems[0]?.id ?? "";
+        return activeTodoItems[0]?.id ?? "";
       });
     } catch (error) {
       setLoadError(
@@ -160,9 +157,8 @@ export function ToDoListPage({
   }, [items, search]);
 
   const selectedItem =
-    items.find((item) => item.id === selectedItemId) ??
+    filteredItems.find((item) => item.id === selectedItemId) ??
     filteredItems[0] ??
-    items[0] ??
     null;
 
   const assignedCount = items.filter((item) => item.status === "assigned")
@@ -172,7 +168,8 @@ export function ToDoListPage({
     (item) => item.status === "in_progress",
   ).length;
 
-  const doneCount = items.filter((item) => item.status === "done").length;
+  const revisionCount = items.filter((item) => item.status === "needs_revision")
+    .length;
 
   function showNotice(message: string, type: NoticeState["type"] = "success") {
     setNotice({
@@ -198,36 +195,6 @@ export function ToDoListPage({
     setSelectedItemId(input.id);
 
     await loadData();
-  }
-
-  function handleMarkDone(item: TodoDbItem) {
-    setConfirm({
-      title: "Mark this work as done?",
-      description: `"${item.title}" will be marked as done. You can still edit it later if needed.`,
-      actionLabel: "Mark Done",
-      tone: "blue",
-      onConfirm: () => executeMarkDone(item),
-    });
-  }
-
-  async function executeMarkDone(item: TodoDbItem) {
-    try {
-      setBusyItemId(item.id);
-
-      await updateTodoStatus(item.id, "done");
-
-      showNotice("Work item marked as done.");
-      setConfirm(null);
-
-      await loadData();
-    } catch (error) {
-      showNotice(
-        error instanceof Error ? error.message : "Failed to update status.",
-        "error",
-      );
-    } finally {
-      setBusyItemId("");
-    }
   }
 
   function handleDeleteTodo(item: TodoDbItem) {
@@ -271,8 +238,8 @@ export function ToDoListPage({
         title={isAdmin ? "To Do List" : "My To Do List"}
         description={
           isAdmin
-            ? "Create clean work instructions, assign them to a person or everyone, and manage production copy."
-            : "View your assigned work and copy the production instructions."
+            ? "Create active work instructions. Submitted and completed work moves to Production Board and Ready to Upload."
+            : "View active assigned work. Submitted work moves to review."
         }
         onOpenSidebar={onOpenSidebar}
         accent="blue"
@@ -280,7 +247,7 @@ export function ToDoListPage({
           {
             icon: ListTodo,
             value: items.length,
-            label: "Total items",
+            label: "Active work",
             accent: "blue",
           },
           {
@@ -296,10 +263,10 @@ export function ToDoListPage({
             accent: "amber",
           },
           {
-            icon: CheckCircle2,
-            value: doneCount,
-            label: "Done",
-            accent: "emerald",
+            icon: AlertTriangle,
+            value: revisionCount,
+            label: "Revision",
+            accent: "amber",
           },
         ]}
       />
@@ -327,7 +294,7 @@ export function ToDoListPage({
               </h2>
 
               <p className="mt-1 text-xs text-slate-500">
-                {isAdmin ? "All assigned production work." : "Assigned to you."}
+                {isAdmin ? "Active production work." : "Needs your action."}
               </p>
             </div>
 
@@ -351,7 +318,7 @@ export function ToDoListPage({
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search work..."
+              placeholder="Search active work..."
               className="w-full min-w-0 bg-transparent text-sm font-semibold text-slate-300 outline-none placeholder:text-slate-600"
             />
           </div>
@@ -383,7 +350,6 @@ export function ToDoListPage({
               isAdmin={isAdmin}
               busyItemId={busyItemId}
               onEdit={setEditingItem}
-              onMarkDone={handleMarkDone}
               onDelete={handleDeleteTodo}
             />
           ) : (
@@ -453,12 +419,7 @@ function ToDoCard({
           : "border-white/10 bg-[#0B0D10] hover:border-white/20 hover:bg-[#14171D]",
       ].join(" ")}
     >
-      <span
-        className={[
-          "absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b",
-          brandGradient(pageName(item)),
-        ].join(" ")}
-      />
+      <span className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-cyan-400 via-blue-500 to-violet-600" />
 
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge status={item.status} />
@@ -489,14 +450,12 @@ function ToDoViewer({
   isAdmin,
   busyItemId,
   onEdit,
-  onMarkDone,
   onDelete,
 }: {
   item: TodoDbItem;
   isAdmin: boolean;
   busyItemId: string;
   onEdit: (item: TodoDbItem) => void;
-  onMarkDone: (item: TodoDbItem) => void;
   onDelete: (item: TodoDbItem) => void;
 }) {
   const isBusy = busyItemId === item.id;
@@ -549,21 +508,6 @@ function ToDoViewer({
                 Edit
               </button>
 
-              {item.status !== "done" && (
-                <button
-                  onClick={() => onMarkDone(item)}
-                  disabled={isBusy}
-                  className="flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isBusy ? (
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="h-4 w-4" />
-                  )}
-                  Mark Done
-                </button>
-              )}
-
               <button
                 onClick={() => onDelete(item)}
                 disabled={isBusy}
@@ -598,18 +542,6 @@ function ToDoViewer({
               </p>
             </div>
           )}
-
-          {item.drive_url && (
-            <div className="rounded-xl border border-blue-500/15 bg-blue-500/[0.055] p-5">
-              <p className="text-xs font-black uppercase tracking-wide text-blue-300">
-                Drive Link
-              </p>
-
-              <p className="mt-3 break-words text-sm leading-7 text-slate-200">
-                {item.drive_url}
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -631,6 +563,11 @@ function TodoFormModal(props: TodoFormModalProps) {
       ? props.item.content_page_id ?? pages[0]?.id ?? ""
       : pages[0]?.id ?? "";
 
+  const initialStatus =
+    mode === "edit" && activeStatusOptions.includes(props.item.status)
+      ? props.item.status
+      : "assigned";
+
   const [form, setForm] = useState<{
     title: string;
     contentPageId: string;
@@ -650,7 +587,7 @@ function TodoFormModal(props: TodoFormModalProps) {
     promptB: mode === "edit" ? props.item.prompt_b : "",
     notes: mode === "edit" ? props.item.notes : "",
     dueDate: mode === "edit" ? props.item.due_date ?? "" : "",
-    status: mode === "edit" ? props.item.status : "assigned",
+    status: initialStatus,
   });
 
   const [saving, setSaving] = useState(false);
@@ -721,7 +658,7 @@ function TodoFormModal(props: TodoFormModalProps) {
             </p>
 
             <h2 className="mt-2 text-2xl font-black text-white">
-              {mode === "create" ? "Create assigned work" : "Update work item"}
+              {mode === "create" ? "Create active work" : "Update active work"}
             </h2>
 
             <p className="mt-2 text-sm leading-6 text-slate-500">
@@ -827,7 +764,7 @@ function TodoFormModal(props: TodoFormModalProps) {
                   }
                   className="md:col-span-2"
                 >
-                  {statusOptions.map((status) => (
+                  {activeStatusOptions.map((status) => (
                     <option key={status} value={status}>
                       {statusLabel(status)}
                     </option>
@@ -929,11 +866,6 @@ function ConfirmModal({
   busy: boolean;
   onClose: () => void;
 }) {
-  const toneStyle = {
-    blue: "border-blue-500/20 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20",
-    red: "border-red-500/25 bg-red-500/15 text-red-200 hover:bg-red-500/25",
-  };
-
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#111318] p-6 shadow-2xl shadow-black/50">
@@ -973,10 +905,7 @@ function ConfirmModal({
           <button
             onClick={() => void confirm.onConfirm()}
             disabled={busy}
-            className={[
-              "flex items-center justify-center gap-2 rounded-lg border px-5 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60",
-              toneStyle[confirm.tone],
-            ].join(" ")}
+            className="flex items-center justify-center gap-2 rounded-lg border border-red-500/25 bg-red-500/15 px-5 py-3 text-sm font-black text-red-200 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
             {busy ? "Working..." : confirm.actionLabel}
@@ -1156,11 +1085,11 @@ function EmptyToDoList({ isAdmin }: { isAdmin: boolean }) {
     <div className="flex min-h-[260px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-[#0B0D10] p-8 text-center">
       <div>
         <ListTodo className="mx-auto h-10 w-10 text-slate-600" />
-        <p className="mt-3 font-semibold text-white">No work items found</p>
+        <p className="mt-3 font-semibold text-white">No active work found</p>
         <p className="mt-1 text-sm text-slate-500">
           {isAdmin
             ? "Create a new assigned work item to start."
-            : "No work has been assigned to you yet."}
+            : "No active work is assigned to you right now."}
         </p>
       </div>
     </div>
@@ -1178,6 +1107,10 @@ function LoadingTodoItems() {
       ))}
     </div>
   );
+}
+
+function isActiveTodoItem(item: TodoDbItem) {
+  return ["assigned", "in_progress", "needs_revision"].includes(item.status);
 }
 
 function pageName(item: TodoDbItem) {
@@ -1203,7 +1136,7 @@ function statusLabel(status: TodoDbStatus) {
     case "in_progress":
       return "In Progress";
     case "submitted":
-      return "Submitted";
+      return "Under Review";
     case "needs_revision":
       return "Needs Revision";
     case "approved":
@@ -1221,29 +1154,16 @@ function statusStyle(status: TodoDbStatus) {
       return "border-blue-500/20 bg-blue-500/10 text-blue-300";
     case "in_progress":
       return "border-amber-500/20 bg-amber-500/10 text-amber-300";
-    case "submitted":
-      return "border-violet-500/20 bg-violet-500/10 text-violet-300";
     case "needs_revision":
       return "border-red-500/20 bg-red-500/10 text-red-300";
+    case "submitted":
+      return "border-violet-500/20 bg-violet-500/10 text-violet-300";
     case "approved":
       return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
     case "done":
       return "border-green-500/20 bg-green-500/10 text-green-300";
     default:
       return "border-white/10 bg-white/5 text-slate-300";
-  }
-}
-
-function brandGradient(name: string) {
-  switch (name) {
-    case "Maya's Kitchen":
-      return "from-emerald-400 via-emerald-500 to-green-600";
-    case "Chef Marrow":
-      return "from-amber-400 via-orange-500 to-yellow-600";
-    case "Noutrix":
-      return "from-cyan-400 via-blue-500 to-violet-600";
-    default:
-      return "from-blue-400 via-violet-500 to-cyan-500";
   }
 }
 
