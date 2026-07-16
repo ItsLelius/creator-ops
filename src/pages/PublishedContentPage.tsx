@@ -4,15 +4,19 @@ import {
   CheckCircle2,
   Copy,
   ExternalLink,
+  LoaderCircle,
   RefreshCw,
   Search,
+  Trash2,
   Upload,
   UserRound,
   Users,
   Video,
+  X,
 } from "lucide-react";
 import { PageHeader } from "../components/common/PageHeader";
-import { getTodoItems } from "../services/todoService";
+import { useAuth } from "../context/AuthContext";
+import { deleteTodoItem, getTodoItems } from "../services/todoService";
 import type { TodoDbItem } from "../types";
 
 type PublishedContentPageProps = {
@@ -24,15 +28,27 @@ type NoticeState = {
   message: string;
 };
 
+type ConfirmState = {
+  title: string;
+  description: string;
+  actionLabel: string;
+  onConfirm: () => Promise<void>;
+};
+
 export function PublishedContentPage({
   onOpenSidebar,
 }: PublishedContentPageProps) {
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser?.role === "admin";
+
   const [items, setItems] = useState<TodoDbItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState("");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [busyItemId, setBusyItemId] = useState("");
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState<NoticeState | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
   async function loadUploadedItems() {
     try {
@@ -103,6 +119,42 @@ export function PublishedContentPage({
     await navigator.clipboard.writeText(value);
 
     showNotice(`${label} copied.`);
+  }
+
+  function requestDeleteUploaded(item: TodoDbItem) {
+    setConfirm({
+      title: "Delete uploaded content?",
+      description: `"${item.title}" will be permanently deleted from Uploaded Content. This action cannot be undone.`,
+      actionLabel: "Delete Content",
+      onConfirm: () => executeDeleteUploaded(item),
+    });
+  }
+
+  async function executeDeleteUploaded(item: TodoDbItem) {
+    try {
+      setBusyItemId(item.id);
+
+      await deleteTodoItem(item.id);
+
+      const remainingItems = items.filter(
+        (currentItem) => currentItem.id !== item.id,
+      );
+
+      setItems(remainingItems);
+      setSelectedItemId(remainingItems[0]?.id ?? "");
+      setConfirm(null);
+
+      showNotice("Uploaded content deleted.");
+    } catch (error) {
+      showNotice(
+        error instanceof Error
+          ? error.message
+          : "Failed to delete uploaded content.",
+        "error",
+      );
+    } finally {
+      setBusyItemId("");
+    }
   }
 
   return (
@@ -208,7 +260,13 @@ export function PublishedContentPage({
 
         <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#111318]">
           {selectedItem ? (
-            <UploadedDetail item={selectedItem} onCopy={copyText} />
+            <UploadedDetail
+              item={selectedItem}
+              isAdmin={isAdmin}
+              busy={busyItemId === selectedItem.id}
+              onCopy={copyText}
+              onDelete={requestDeleteUploaded}
+            />
           ) : (
             <div className="flex flex-1 items-center justify-center p-10 text-center">
               <div>
@@ -224,6 +282,14 @@ export function PublishedContentPage({
           )}
         </main>
       </section>
+
+      {confirm && (
+        <ConfirmModal
+          confirm={confirm}
+          busy={Boolean(busyItemId)}
+          onClose={() => setConfirm(null)}
+        />
+      )}
     </div>
   );
 }
@@ -277,10 +343,16 @@ function UploadedCard({
 
 function UploadedDetail({
   item,
+  isAdmin,
+  busy,
   onCopy,
+  onDelete,
 }: {
   item: TodoDbItem;
+  isAdmin: boolean;
+  busy: boolean;
   onCopy: (value: string, label: string) => Promise<void>;
+  onDelete: (item: TodoDbItem) => void;
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -322,17 +394,34 @@ function UploadedDetail({
             </p>
           </div>
 
-          {item.drive_url && (
-            <a
-              href={item.drive_url}
-              target="_blank"
-              rel="noreferrer"
-              className="flex shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-500 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-400"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Open Drive Link
-            </a>
-          )}
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {item.drive_url && (
+              <a
+                href={item.drive_url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-400"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Open Drive
+              </a>
+            )}
+
+            {isAdmin && (
+              <button
+                onClick={() => onDelete(item)}
+                disabled={busy}
+                className="flex items-center justify-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-5 py-3 text-sm font-black text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {busy ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Delete
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -392,6 +481,65 @@ function UploadedDetail({
               </p>
             </section>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmModal({
+  confirm,
+  busy,
+  onClose,
+}: {
+  confirm: ConfirmState;
+  busy: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#111318] p-6 shadow-2xl shadow-black/50">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+              Confirm Delete
+            </p>
+
+            <h3 className="mt-2 text-2xl font-black leading-tight text-white">
+              {confirm.title}
+            </h3>
+          </div>
+
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <X className="h-4.5 w-4.5" />
+          </button>
+        </div>
+
+        <p className="mt-4 text-sm leading-7 text-slate-400">
+          {confirm.description}
+        </p>
+
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-black text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={() => void confirm.onConfirm()}
+            disabled={busy}
+            className="flex items-center justify-center gap-2 rounded-lg border border-red-500/25 bg-red-500/15 px-5 py-3 text-sm font-black text-red-200 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
+            {busy ? "Deleting..." : confirm.actionLabel}
+          </button>
         </div>
       </div>
     </div>

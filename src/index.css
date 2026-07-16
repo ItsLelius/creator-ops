@@ -173,3 +173,68 @@
   color: inherit;
   text-decoration: none;
 }
+
+.calendar-shell .fc {
+  --fc-border-color: rgba(255, 255, 255, 0.08);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: rgba(255, 255, 255, 0.03);
+  --fc-list-event-hover-bg-color: rgba(255, 255, 255, 0.05);
+  color: rgb(226 232 240);
+}
+
+.calendar-shell .fc-theme-standard td,
+.calendar-shell .fc-theme-standard th {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.calendar-shell .fc-col-header-cell {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 0;
+}
+
+.calendar-shell .fc-col-header-cell-cushion,
+.calendar-shell .fc-daygrid-day-number {
+  color: rgb(148 163 184);
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.calendar-shell .fc-daygrid-day-frame {
+  min-height: 112px;
+}
+
+.calendar-shell .fc-daygrid-event {
+  margin: 1px 4px;
+}
+
+.calendar-shell .fc-event {
+  border: 0;
+  background: transparent;
+}
+
+.calendar-shell .fc-button {
+  border-radius: 8px !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  text-transform: capitalize !important;
+}
+
+.calendar-shell .fc-button:hover,
+.calendar-shell .fc-button-primary:not(:disabled).fc-button-active {
+  background: rgba(59, 130, 246, 0.22) !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+
+.calendar-shell .fc-toolbar-title {
+  color: white;
+  font-size: 18px !important;
+  font-weight: 900;
+}
+
+.calendar-shell .fc-more-link {
+  margin-left: 4px;
+  text-decoration: none;
+}

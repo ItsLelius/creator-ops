@@ -1,277 +1,470 @@
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import {
   Copy,
   Download,
+  Edit3,
   ExternalLink,
+  FileImage,
   FileText,
-  Folder,
   FolderOpen,
-  Image,
-  MoreHorizontal,
+  LoaderCircle,
   Plus,
+  RefreshCw,
   Search,
+  Trash2,
+  Upload,
+  X,
 } from "lucide-react";
 import { PageHeader } from "../components/common/PageHeader";
-import { assetItems } from "../data/mockData";
-import type { AssetCategory, AssetItem } from "../types";
+import { useAuth } from "../context/AuthContext";
+import { getContentPages } from "../services/contentPageService";
+import {
+  createAsset,
+  deleteAsset,
+  getAssets,
+  updateAsset,
+  type CreateAssetInput,
+  type UpdateAssetInput,
+} from "../services/assetService";
+import type { AssetDbItem, AssetType, ContentPageDbItem } from "../types";
 
 type AssetLibraryPageProps = {
   onOpenSidebar: () => void;
 };
 
-const assetSections: Array<{
-  key: AssetCategory;
+type NoticeState = {
+  type: "success" | "error";
+  message: string;
+};
+
+type ConfirmState = {
+  title: string;
+  description: string;
+  actionLabel: string;
+  onConfirm: () => Promise<void>;
+};
+
+type AssetFormModalProps =
+  | {
+      mode: "create";
+      pages: ContentPageDbItem[];
+      selectedPageId: string;
+      selectedType: AssetType;
+      onClose: () => void;
+      onSubmit: (input: CreateAssetInput, file?: File | null) => Promise<void>;
+    }
+  | {
+      mode: "edit";
+      asset: AssetDbItem;
+      pages: ContentPageDbItem[];
+      selectedPageId: string;
+      selectedType: AssetType;
+      onClose: () => void;
+      onSubmit: (input: UpdateAssetInput, file?: File | null) => Promise<void>;
+    };
+
+const assetTypeTabs: Array<{
+  type: AssetType;
   label: string;
   description: string;
 }> = [
   {
-    key: "pdf_brain",
-    label: "PDF Brain",
-    description: "Downloadable PDFs and system documents.",
-  },
-  {
-    key: "prompts",
-    label: "Prompts",
-    description: "Plain text prompts with copy button.",
-  },
-  {
-    key: "images",
+    type: "image",
     label: "Images",
-    description: "Reference images and downloadable pictures.",
+    description: "Preview and download image references.",
   },
   {
-    key: "documents",
-    label: "Documents",
-    description: "Downloadable DOC files and written references.",
+    type: "text",
+    label: "Text",
+    description: "Save text assets that can be copied.",
+  },
+  {
+    type: "pdf",
+    label: "PDF",
+    description: "Preview and download PDF documents.",
   },
 ];
 
 export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
-  const [selectedBrand, setSelectedBrand] = useState<string | null>(
-    "Maya's Kitchen",
-  );
-  const [selectedCategory, setSelectedCategory] =
-    useState<AssetCategory>("prompts");
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser?.role === "admin";
+
+  const [pages, setPages] = useState<ContentPageDbItem[]>([]);
+  const [assets, setAssets] = useState<AssetDbItem[]>([]);
+  const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
+  const [selectedType, setSelectedType] = useState<AssetType>("pdf");
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busyAssetId, setBusyAssetId] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [notice, setNotice] = useState<NoticeState | null>(null);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<AssetDbItem | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
-  const brands = useMemo(() => {
-    return Array.from(new Set(assetItems.map((asset) => asset.brand)));
+  async function loadData() {
+    try {
+      setLoading(true);
+      setLoadError("");
+
+      const [pageRows, assetRows] = await Promise.all([
+        getContentPages(),
+        getAssets(),
+      ]);
+
+      setPages(pageRows);
+      setAssets(assetRows);
+
+      setSelectedPageId((currentPageId) => {
+        if (
+          currentPageId &&
+          pageRows.some((page) => page.id === currentPageId)
+        ) {
+          return currentPageId;
+        }
+
+        return pageRows[0]?.id ?? null;
+      });
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Failed to load asset library.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadData();
   }, []);
 
-  const filteredAssets = useMemo(() => {
-    return assetItems.filter((asset) => {
-      const matchesBrand = selectedBrand ? asset.brand === selectedBrand : false;
-      const matchesCategory = asset.category === selectedCategory;
-      const matchesSearch = asset.title
-        .toLowerCase()
-        .includes(search.toLowerCase());
+  const activePages = useMemo(() => {
+    return pages.filter((page) => page.status === "active");
+  }, [pages]);
 
-      return matchesBrand && matchesCategory && matchesSearch;
+  const folders = useMemo(() => {
+    return pages
+      .map((page) => ({
+        page,
+        count: assets.filter((asset) => asset.content_page_id === page.id)
+          .length,
+      }))
+      .sort((a, b) => a.page.name.localeCompare(b.page.name));
+  }, [pages, assets]);
+
+  const selectedPage = useMemo(() => {
+    return pages.find((page) => page.id === selectedPageId) ?? null;
+  }, [pages, selectedPageId]);
+
+  const selectedTab = assetTypeTabs.find((tab) => tab.type === selectedType);
+
+  const filteredAssets = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return assets.filter((asset) => {
+      const matchesPage = selectedPageId
+        ? asset.content_page_id === selectedPageId
+        : false;
+
+      const matchesType = asset.type === selectedType;
+
+      const matchesSearch =
+        !query ||
+        asset.title.toLowerCase().includes(query) ||
+        asset.description.toLowerCase().includes(query) ||
+        asset.content.toLowerCase().includes(query) ||
+        asset.file_name.toLowerCase().includes(query);
+
+      return matchesPage && matchesType && matchesSearch;
     });
-  }, [selectedBrand, selectedCategory, search]);
+  }, [assets, selectedPageId, selectedType, search]);
 
   const selectedAsset =
     filteredAssets.find((asset) => asset.id === selectedAssetId) ??
     filteredAssets[0] ??
     null;
 
-  const selectedSection = assetSections.find(
-    (section) => section.key === selectedCategory,
-  );
+  const imageCount = assets.filter((asset) => asset.type === "image").length;
+  const textCount = assets.filter((asset) => asset.type === "text").length;
+  const pdfCount = assets.filter((asset) => asset.type === "pdf").length;
+
+  function showNotice(message: string, type: NoticeState["type"] = "success") {
+    setNotice({
+      message,
+      type,
+    });
+  }
+
+  function openPage(pageId: string) {
+    setSelectedPageId(pageId);
+    setSelectedAssetId(null);
+    setSearch("");
+    setNotice(null);
+  }
+
+  function changeType(type: AssetType) {
+    setSelectedType(type);
+    setSelectedAssetId(null);
+    setSearch("");
+  }
+
+  async function handleCreateAsset(input: CreateAssetInput, file?: File | null) {
+    const created = await createAsset(input, file);
+
+    showNotice(`${assetTypeLabel(input.type)} asset saved.`);
+    setCreateModalOpen(false);
+    setSelectedPageId(input.contentPageId);
+    setSelectedType(input.type);
+    setSelectedAssetId(created.id);
+
+    await loadData();
+  }
+
+  async function handleUpdateAsset(input: UpdateAssetInput, file?: File | null) {
+    await updateAsset(input, file);
+
+    showNotice(`${assetTypeLabel(input.type)} asset updated.`);
+    setEditingAsset(null);
+    setSelectedPageId(input.contentPageId);
+    setSelectedType(input.type);
+    setSelectedAssetId(input.id);
+
+    await loadData();
+  }
+
+  function requestDeleteAsset(asset: AssetDbItem) {
+    setConfirm({
+      title: `Delete this ${assetTypeLabel(asset.type)}?`,
+      description: `"${asset.title}" will be permanently removed from Asset Library.`,
+      actionLabel: `Delete ${assetTypeLabel(asset.type)}`,
+      onConfirm: () => executeDeleteAsset(asset),
+    });
+  }
+
+  async function executeDeleteAsset(asset: AssetDbItem) {
+    try {
+      setBusyAssetId(asset.id);
+
+      await deleteAsset(asset.id);
+
+      const remainingAssets = assets.filter((item) => item.id !== asset.id);
+
+      setAssets(remainingAssets);
+      setSelectedAssetId(
+        remainingAssets.find(
+          (item) =>
+            item.content_page_id === asset.content_page_id &&
+            item.type === asset.type,
+        )?.id ?? null,
+      );
+      setConfirm(null);
+
+      showNotice(`${assetTypeLabel(asset.type)} asset deleted.`);
+    } catch (error) {
+      showNotice(
+        error instanceof Error ? error.message : "Failed to delete asset.",
+        "error",
+      );
+    } finally {
+      setBusyAssetId("");
+    }
+  }
+
+  async function copyText(value: string, label: string) {
+    await navigator.clipboard.writeText(value);
+    showNotice(`${label} copied.`);
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Asset Library"
-        description="Downloadable PDFs, images, prompts, and production references."
+        description="Each Brand Page has built-in Images, Text, and PDF sections."
         onOpenSidebar={onOpenSidebar}
         accent="cyan"
         pills={[
           {
             icon: FolderOpen,
-            value: brands.length,
+            value: pages.length,
             label: "Page folders",
             accent: "cyan",
           },
           {
-            icon: FileText,
-            value: assetItems.filter((asset) => asset.type === "pdf").length,
-            label: "PDF files",
-            accent: "blue",
-          },
-          {
-            icon: Image,
-            value: assetItems.filter((asset) => asset.type === "image").length,
+            icon: FileImage,
+            value: imageCount,
             label: "Images",
             accent: "violet",
+          },
+          {
+            icon: Copy,
+            value: textCount,
+            label: "Text",
+            accent: "amber",
+          },
+          {
+            icon: FileText,
+            value: pdfCount,
+            label: "PDF",
+            accent: "blue",
           },
         ]}
       />
 
-      <section className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[260px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col rounded-2xl border border-white/10 bg-[#111318] p-4">
-          <div className="mb-4 flex items-center justify-between">
+      {(loadError || notice) && (
+        <div className="mb-4">
+          {loadError ? (
+            <NoticeCard tone="error" title="Could not load Asset Library">
+              {loadError}
+            </NoticeCard>
+          ) : notice ? (
+            <NoticeCard tone={notice.type} title={notice.type}>
+              {notice.message}
+            </NoticeCard>
+          ) : null}
+        </div>
+      )}
+
+      <section className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-[#111318] p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-bold uppercase tracking-wide text-slate-400">
+              <h2 className="text-sm font-black uppercase tracking-wide text-slate-400">
                 Library
               </h2>
               <p className="mt-1 text-xs text-slate-500">
-                Page folders and asset types.
+                Brand Page asset folders.
               </p>
             </div>
 
             <button
-              onClick={() => alert("Later: create new page folder")}
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500 text-white transition hover:bg-blue-400"
-              title="Add folder"
+              onClick={() => void loadData()}
+              disabled={loading}
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              title="Refresh"
             >
-              <Plus className="h-4 w-4" />
+              <RefreshCw
+                className={["h-4 w-4", loading ? "animate-spin" : ""].join(
+                  " ",
+                )}
+              />
             </button>
           </div>
 
           <div className="scroll-panel min-h-0 flex-1 overflow-y-auto pr-1">
-            <div className="space-y-3">
-              {brands.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-white/10 bg-[#0B0D10] p-4 text-center">
-                  <p className="text-sm font-semibold text-white">
-                    No folders yet
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Add your first page folder.
-                  </p>
-                </div>
-              ) : (
-                brands.map((brand) => {
-                  const activeBrand = selectedBrand === brand;
-
-                  return (
-                    <div
-                      key={brand}
-                      className={[
-                        "rounded-xl border p-2 transition",
-                        activeBrand
-                          ? "border-cyan-500/30 bg-cyan-500/[0.05]"
-                          : "border-white/5 bg-[#0B0D10]",
-                      ].join(" ")}
-                    >
-                      <button
-                        onClick={() => {
-                          setSelectedBrand(brand);
-                          setSelectedAssetId(null);
-                          setSearch("");
-                        }}
-                        className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2 text-left transition hover:bg-white/5"
-                      >
-                        <div className="flex min-w-0 items-center gap-2">
-                          {activeBrand ? (
-                            <FolderOpen className="h-4 w-4 shrink-0 text-cyan-300" />
-                          ) : (
-                            <Folder className="h-4 w-4 shrink-0 text-slate-500" />
-                          )}
-
-                          <span
-                            className={[
-                              "truncate text-sm font-semibold",
-                              activeBrand ? "text-white" : "text-slate-300",
-                            ].join(" ")}
-                          >
-                            {brand}
-                          </span>
-                        </div>
-
-                        <MoreHorizontal className="h-4 w-4 shrink-0 text-slate-600" />
-                      </button>
-
-                      {activeBrand && (
-                        <div className="mt-1 space-y-1 border-l border-white/10 pl-3">
-                          {assetSections.map((section) => {
-                            const activeSection =
-                              selectedCategory === section.key;
-
-                            const count = assetItems.filter(
-                              (asset) =>
-                                asset.brand === brand &&
-                                asset.category === section.key,
-                            ).length;
-
-                            return (
-                              <button
-                                key={section.key}
-                                onClick={() => {
-                                  setSelectedCategory(section.key);
-                                  setSelectedAssetId(null);
-                                  setSearch("");
-                                }}
-                                className={[
-                                  "flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition",
-                                  activeSection
-                                    ? "bg-cyan-500/10 text-cyan-200"
-                                    : "text-slate-400 hover:bg-white/5 hover:text-white",
-                                ].join(" ")}
-                              >
-                                <span>{section.label}</span>
-                                <span className="text-xs text-slate-500">
-                                  {count}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            {loading ? (
+              <LoadingFolders />
+            ) : folders.length === 0 ? (
+              <EmptySmallState
+                title="No folders yet"
+                description="Create Brand Pages first."
+              />
+            ) : (
+              <div className="space-y-3">
+                {folders.map((folder) => (
+                  <FolderButton
+                    key={folder.page.id}
+                    page={folder.page}
+                    count={folder.count}
+                    active={selectedPageId === folder.page.id}
+                    onClick={() => openPage(folder.page.id)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </aside>
 
-        <main className="flex min-h-0 min-w-0 flex-col rounded-2xl border border-white/10 bg-[#111318] p-5">
+        <main className="flex min-h-0 min-w-0 flex-col rounded-xl border border-white/10 bg-[#111318] p-5">
           <div className="mb-4 flex shrink-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0">
-              <h2 className="truncate text-xl font-bold text-white">
-                {selectedBrand ?? "No Folder Selected"} /{" "}
-                {selectedSection?.label}
+              <h2 className="truncate text-xl font-black text-white">
+                {selectedPage?.name ?? "No Folder Selected"} /{" "}
+                {selectedTab?.label}
               </h2>
 
-              <p className="mt-1 text-sm text-slate-400">
-                {selectedSection?.description}
+              <p className="mt-1 text-sm text-slate-500">
+                {selectedTab?.description}
               </p>
             </div>
 
-            <button
-              onClick={() => alert("Later: Add asset CRUD modal")}
-              className="flex w-fit items-center gap-2 rounded-xl bg-blue-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-400"
-            >
-              <Plus className="h-4 w-4" />
-              Add Asset
-            </button>
+            {isAdmin && activePages.length > 0 && (
+              <button
+                onClick={() => {
+                  setCreateModalOpen(true);
+                  setNotice(null);
+                }}
+                className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-black text-white transition hover:bg-blue-400"
+              >
+                <Plus className="h-4 w-4" />
+                Add {assetTypeLabel(selectedType)}
+              </button>
+            )}
           </div>
 
-          <div className="mb-4 flex items-center gap-2 rounded-xl border border-white/10 bg-[#0B0D10] px-3 py-2.5">
-            <Search className="h-4 w-4 shrink-0 text-slate-500" />
+          <div className="mb-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#0B0D10] px-3 py-2.5">
+              <Search className="h-4 w-4 shrink-0 text-slate-500" />
 
-            <input
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setSelectedAssetId(null);
-              }}
-              placeholder={`Search ${selectedSection?.label.toLowerCase()}...`}
-              className="w-full min-w-0 bg-transparent text-sm text-slate-300 outline-none placeholder:text-slate-600"
-            />
+              <input
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setSelectedAssetId(null);
+                }}
+                placeholder={`Search ${selectedTab?.label.toLowerCase()}...`}
+                className="w-full min-w-0 bg-transparent text-sm font-semibold text-slate-300 outline-none placeholder:text-slate-600"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 rounded-lg border border-white/10 bg-[#0B0D10] p-1">
+              {assetTypeTabs.map((tab) => {
+                const active = selectedType === tab.type;
+                const count = assets.filter(
+                  (asset) =>
+                    asset.content_page_id === selectedPageId &&
+                    asset.type === tab.type,
+                ).length;
+
+                return (
+                  <button
+                    key={tab.type}
+                    onClick={() => changeType(tab.type)}
+                    className={[
+                      "rounded-lg px-3 py-2 text-xs font-black transition",
+                      active
+                        ? "bg-blue-500 text-white"
+                        : "text-slate-400 hover:bg-white/[0.05] hover:text-white",
+                    ].join(" ")}
+                  >
+                    {tab.label}{" "}
+                    <span className={active ? "text-white/80" : "text-slate-600"}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[170px_minmax(0,1fr)]">
+          <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
             <div className="scroll-panel min-h-0 overflow-y-auto pr-1">
-              {filteredAssets.length === 0 ? (
-                <EmptyState
-                  title="No assets here yet"
-                  description="Add a PDF, prompt, document, or image to this section."
+              {loading ? (
+                <LoadingAssets />
+              ) : filteredAssets.length === 0 ? (
+                <EmptyAssetList
+                  isAdmin={isAdmin}
+                  type={selectedType}
+                  onAdd={() => setCreateModalOpen(true)}
                 />
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {filteredAssets.map((asset) => (
                     <AssetListItem
                       key={asset.id}
@@ -286,16 +479,23 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
 
             <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0B0D10]">
               {selectedAsset ? (
-                <AssetViewer asset={selectedAsset} />
+                <AssetViewer
+                  asset={selectedAsset}
+                  isAdmin={isAdmin}
+                  busy={busyAssetId === selectedAsset.id}
+                  onEdit={setEditingAsset}
+                  onDelete={requestDeleteAsset}
+                  onCopy={copyText}
+                />
               ) : (
                 <div className="flex flex-1 items-center justify-center p-6 text-center">
                   <div>
-                    <FolderOpen className="mx-auto h-10 w-10 text-slate-600" />
+                    <FileText className="mx-auto h-10 w-10 text-slate-600" />
                     <p className="mt-3 font-semibold text-white">
                       Select an asset
                     </p>
                     <p className="mt-1 text-sm text-slate-500">
-                      Preview and download details will appear here.
+                      Preview and actions will appear here.
                     </p>
                   </div>
                 </div>
@@ -304,7 +504,86 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
           </div>
         </main>
       </section>
+
+      {createModalOpen && (
+        <AssetFormModal
+          mode="create"
+          pages={activePages}
+          selectedPageId={selectedPageId ?? activePages[0]?.id ?? ""}
+          selectedType={selectedType}
+          onClose={() => setCreateModalOpen(false)}
+          onSubmit={handleCreateAsset}
+        />
+      )}
+
+      {editingAsset && (
+        <AssetFormModal
+          mode="edit"
+          asset={editingAsset}
+          pages={pages}
+          selectedPageId={selectedPageId ?? editingAsset.content_page_id}
+          selectedType={selectedType}
+          onClose={() => setEditingAsset(null)}
+          onSubmit={handleUpdateAsset}
+        />
+      )}
+
+      {confirm && (
+        <ConfirmModal
+          confirm={confirm}
+          busy={Boolean(busyAssetId)}
+          onClose={() => setConfirm(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function FolderButton({
+  page,
+  count,
+  active,
+  onClick,
+}: {
+  page: ContentPageDbItem;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const archived = page.status === "archived";
+
+  return (
+    <button
+      onClick={onClick}
+      className={[
+        "group relative w-full overflow-hidden rounded-xl border p-4 text-left transition",
+        active
+          ? "border-cyan-500/45 bg-cyan-500/[0.065] ring-1 ring-cyan-500/30"
+          : "border-white/10 bg-[#0B0D10] hover:border-white/20 hover:bg-[#14171D]",
+        archived ? "opacity-70" : "",
+      ].join(" ")}
+    >
+      <span
+        className={[
+          "absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b",
+          archived
+            ? "from-slate-500 via-slate-600 to-slate-700"
+            : "from-cyan-400 via-blue-500 to-violet-600",
+        ].join(" ")}
+      />
+
+      <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-cyan-300">
+        <FolderOpen className="h-5 w-5" />
+      </div>
+
+      <h3 className="mt-3 line-clamp-2 text-sm font-black text-white">
+        {page.name}
+      </h3>
+
+      <p className="mt-1 text-xs font-semibold text-slate-500">
+        {count} asset{count === 1 ? "" : "s"}
+      </p>
+    </button>
   );
 }
 
@@ -313,7 +592,7 @@ function AssetListItem({
   selected,
   onClick,
 }: {
-  asset: AssetItem;
+  asset: AssetDbItem;
   selected: boolean;
   onClick: () => void;
 }) {
@@ -321,93 +600,193 @@ function AssetListItem({
     <button
       onClick={onClick}
       className={[
-        "group relative flex h-[58px] w-full min-w-0 flex-col justify-center overflow-hidden rounded-lg border px-3 py-2 pl-4 text-left transition-all",
+        "group relative w-full overflow-hidden rounded-xl border p-4 text-left transition",
         selected
-          ? "border-cyan-500 bg-cyan-500/[0.08] ring-1 ring-cyan-500/40"
-          : "border-white/10 bg-[#0B0D10] hover:border-white/20 hover:bg-[#14171d]",
+          ? "border-blue-500/45 bg-blue-500/[0.065] ring-1 ring-blue-500/30"
+          : "border-white/10 bg-[#0B0D10] hover:border-white/20 hover:bg-[#14171D]",
       ].join(" ")}
     >
-      <span
-        className={[
-          "absolute bottom-0 left-0 top-0 w-[3px] bg-gradient-to-b",
-          assetLeftGradient(asset.type),
-        ].join(" ")}
-      />
+      <span className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-blue-400 via-cyan-500 to-violet-600" />
 
-      <div className="mb-1 flex items-center justify-between gap-1.5">
+      <div className="flex flex-wrap gap-2">
         <span
           className={[
-            "rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide",
+            "rounded-lg border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide",
             assetTypeBadge(asset.type),
           ].join(" ")}
         >
-          {asset.type}
+          {assetTypeLabel(asset.type)}
         </span>
 
-        <MoreHorizontal className="h-3.5 w-3.5 shrink-0 text-slate-600 opacity-0 transition group-hover:opacity-100" />
+        {asset.type !== "text" && (
+          <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-black text-slate-300">
+            {formatFileSize(asset.file_size)}
+          </span>
+        )}
       </div>
 
-      <h3 className="truncate text-[12px] font-bold leading-none text-slate-100">
+      <h3 className="mt-3 line-clamp-2 text-sm font-black leading-snug text-white">
         {asset.title}
       </h3>
+
+      <p className="mt-2 line-clamp-1 text-xs font-semibold text-slate-500">
+        {asset.type === "text"
+          ? asset.content || "No text content."
+          : asset.file_name}
+      </p>
     </button>
   );
 }
 
-function AssetViewer({ asset }: { asset: AssetItem }) {
+function AssetViewer({
+  asset,
+  isAdmin,
+  busy,
+  onEdit,
+  onDelete,
+  onCopy,
+}: {
+  asset: AssetDbItem;
+  isAdmin: boolean;
+  busy: boolean;
+  onEdit: (asset: AssetDbItem) => void;
+  onDelete: (asset: AssetDbItem) => void;
+  onCopy: (value: string, label: string) => Promise<void>;
+}) {
+  const canDownload = asset.type === "image" || asset.type === "pdf";
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="border-b border-white/10 bg-[#111318] p-5">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
-            <span
-              className={[
-                "rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide",
-                assetTypeBadge(asset.type),
-              ].join(" ")}
-            >
-              {asset.type}
-            </span>
+            <div className="flex flex-wrap gap-2">
+              <span
+                className={[
+                  "rounded-lg border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide",
+                  assetTypeBadge(asset.type),
+                ].join(" ")}
+              >
+                {assetTypeLabel(asset.type)} Preview
+              </span>
 
-            <h3 className="mt-3 break-words text-xl font-bold leading-snug text-white">
+              {asset.type !== "text" && (
+                <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-black text-slate-300">
+                  {formatFileSize(asset.file_size)}
+                </span>
+              )}
+            </div>
+
+            <h3 className="mt-3 break-words text-2xl font-black leading-tight text-white">
               {asset.title}
             </h3>
 
-            <p className="mt-1 text-sm text-slate-400">{asset.brand}</p>
+            <p className="mt-2 break-words text-sm font-semibold text-slate-500">
+              {asset.type === "text" ? pageName(asset) : asset.file_name}
+            </p>
           </div>
 
-          <button
-            onClick={() => alert("Later: asset CRUD actions")}
-            className="rounded-lg p-2 text-slate-500 transition hover:bg-white/10 hover:text-white"
-          >
-            <MoreHorizontal className="h-5 w-5" />
-          </button>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {asset.file_url && canDownload && (
+              <>
+                <a
+                  href={asset.file_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-sm font-black text-blue-300 transition hover:bg-blue-500/20"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Open
+                </a>
+
+                <a
+                  href={asset.file_url}
+                  download={asset.file_name}
+                  className="flex items-center justify-center gap-2 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-sm font-black text-cyan-300 transition hover:bg-cyan-500/20"
+                >
+                  <Download className="h-4 w-4" />
+                  Download
+                </a>
+              </>
+            )}
+
+            {asset.type === "text" && (
+              <button
+                onClick={() => void onCopy(asset.content, "Text")}
+                className="flex items-center justify-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/10 px-3 py-2 text-sm font-black text-violet-300 transition hover:bg-violet-500/20"
+              >
+                <Copy className="h-4 w-4" />
+                Copy Text
+              </button>
+            )}
+
+            {isAdmin && (
+              <>
+                <button
+                  onClick={() => onEdit(asset)}
+                  className="flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-black text-slate-300 transition hover:bg-white/[0.07] hover:text-white"
+                >
+                  <Edit3 className="h-4 w-4" />
+                  Edit
+                </button>
+
+                <button
+                  onClick={() => onDelete(asset)}
+                  disabled={busy}
+                  className="flex items-center justify-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-black text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {busy ? (
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Delete
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="scroll-panel min-h-0 flex-1 overflow-y-auto p-5">
-        {asset.type === "image" && (
-          <div className="flex h-[calc(100vh-365px)] min-h-[660px] items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-[#07090c] p-4">
-            <img
-              src={asset.imageUrl}
-              alt={asset.title}
-              className="h-full max-h-full w-full max-w-full object-contain"
-            />
+        {asset.type === "pdf" && (
+          <div className="h-[calc(100vh-360px)] min-h-[560px] overflow-hidden rounded-xl border border-white/10 bg-[#07090C]">
+            {asset.file_url ? (
+              <iframe
+                title={asset.title}
+                src={asset.file_url}
+                className="h-full w-full bg-white"
+              />
+            ) : (
+              <UnavailablePreview />
+            )}
           </div>
         )}
 
-        {asset.type === "prompt" && (
-          <div className="h-[calc(100vh-365px)] min-h-[660px] overflow-y-auto rounded-xl border border-white/10 bg-[#111318] p-7">
-            <div className="mb-5 flex items-center justify-between">
-              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Prompt Text
+        {asset.type === "image" && (
+          <div className="flex h-[calc(100vh-360px)] min-h-[560px] items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-[#07090C] p-4">
+            {asset.file_url ? (
+              <img
+                src={asset.file_url}
+                alt={asset.title}
+                className="h-full max-h-full w-full max-w-full object-contain"
+              />
+            ) : (
+              <UnavailablePreview />
+            )}
+          </div>
+        )}
+
+        {asset.type === "text" && (
+          <div className="min-h-[560px] rounded-xl border border-white/10 bg-[#111318] p-7">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                Text Content
               </p>
 
               <button
-                onClick={() =>
-                  navigator.clipboard.writeText(asset.content ?? "")
-                }
-                className="flex items-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-xs font-bold text-violet-300 transition hover:bg-violet-500/20"
+                onClick={() => void onCopy(asset.content, "Text")}
+                className="flex items-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-xs font-black text-violet-300 transition hover:bg-violet-500/20"
               >
                 <Copy className="h-3.5 w-3.5" />
                 Copy
@@ -415,65 +794,539 @@ function AssetViewer({ asset }: { asset: AssetItem }) {
             </div>
 
             <p className="whitespace-pre-wrap break-words text-[16px] leading-8 text-slate-100">
-              {asset.content}
+              {asset.content || "Nothing added yet."}
             </p>
           </div>
         )}
 
-        {(asset.type === "pdf" || asset.type === "doc") && (
-          <div className="flex h-[calc(100vh-365px)] min-h-[660px] items-center justify-center rounded-xl border border-white/10 bg-[#111318] p-6 text-center">
-            <div>
-              <FileText className="mx-auto h-16 w-16 text-cyan-300" />
-              <p className="mt-4 text-lg font-bold text-white">
-                {asset.type === "pdf" ? "PDF Document" : "Document File"}
-              </p>
-              <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-400">
-                This file is downloadable and can be opened externally.
-              </p>
-            </div>
-          </div>
-        )}
-
-        <div className="mt-4 rounded-xl border border-white/10 bg-[#111318] p-4">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+        <div className="mt-4 rounded-xl border border-white/10 bg-[#111318] p-5">
+          <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500">
             Description
           </p>
 
-          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-300">
-            {asset.description}
+          <p className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-300">
+            {asset.description || "No description added yet."}
           </p>
-        </div>
-
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          {asset.fileUrl && (
-            <a
-              href={asset.fileUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center justify-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2.5 text-sm font-bold text-blue-300 transition hover:bg-blue-500/20"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Open
-            </a>
-          )}
-
-          {asset.fileUrl && (
-            <a
-              href={asset.fileUrl}
-              download
-              className="flex items-center justify-center gap-2 rounded-lg bg-cyan-600 px-3 py-2.5 text-sm font-bold text-white transition hover:bg-cyan-500"
-            >
-              <Download className="h-4 w-4" />
-              Download
-            </a>
-          )}
         </div>
       </div>
     </div>
   );
 }
 
-function EmptyState({
+function AssetFormModal(props: AssetFormModalProps) {
+  const { mode, pages, selectedPageId, selectedType, onClose, onSubmit } =
+    props;
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [form, setForm] = useState<{
+    contentPageId: string;
+    type: AssetType;
+    title: string;
+    content: string;
+    description: string;
+  }>({
+    contentPageId:
+      mode === "edit"
+        ? props.asset.content_page_id
+        : selectedPageId || pages[0]?.id || "",
+    type: mode === "edit" ? props.asset.type : selectedType,
+    title: mode === "edit" ? props.asset.title : "",
+    content: mode === "edit" ? props.asset.content : "",
+    description: mode === "edit" ? props.asset.description : "",
+  });
+
+  const [file, setFile] = useState<File | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function handleFile(fileToUse: File) {
+    const validation = validateLocalFile(form.type, fileToUse);
+
+    if (validation) {
+      setError(validation);
+      return;
+    }
+
+    setError("");
+    setFile(fileToUse);
+
+    if (!form.title.trim()) {
+      setForm((current) => ({
+        ...current,
+        title: fileToUse.name.replace(/\.[^.]+$/i, ""),
+      }));
+    }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    try {
+      setSaving(true);
+      setError("");
+
+      if (!form.contentPageId) {
+        throw new Error("Choose a brand page.");
+      }
+
+      if (!form.title.trim()) {
+        throw new Error("Title is required.");
+      }
+
+      if (form.type === "text" && !form.content.trim()) {
+        throw new Error("Text content is required.");
+      }
+
+      if (mode === "create") {
+        if (form.type !== "text" && !file) {
+          throw new Error(`Drop or choose a ${assetTypeLabel(form.type)} file.`);
+        }
+
+        await onSubmit(
+          {
+            contentPageId: form.contentPageId,
+            type: form.type,
+            title: form.title,
+            content: form.content,
+            description: form.description,
+          },
+          file,
+        );
+      } else {
+        await onSubmit(
+          {
+            id: props.asset.id,
+            contentPageId: form.contentPageId,
+            type: form.type,
+            title: form.title,
+            content: form.content,
+            description: form.description,
+          },
+          file,
+        );
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Request failed.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const fileMode = form.type === "image" || form.type === "pdf";
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-xl border border-white/10 bg-[#111318] shadow-2xl shadow-black/50">
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 p-6">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-300">
+              {mode === "create" ? "New Asset" : "Edit Asset"}
+            </p>
+
+            <h2 className="mt-2 text-2xl font-black text-white">
+              {mode === "create" ? "Add asset" : "Update asset"}
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              Images and PDFs use drag-and-drop. Text assets are stored as copyable text.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <X className="h-4.5 w-4.5" />
+          </button>
+        </div>
+
+        <form
+          onSubmit={handleSubmit}
+          className="scroll-panel max-h-[calc(92vh-130px)] overflow-y-auto p-6"
+        >
+          <div className="grid grid-cols-3 gap-2 rounded-lg border border-white/10 bg-[#0B0D10] p-1">
+            {assetTypeTabs.map((tab) => {
+              const active = form.type === tab.type;
+
+              return (
+                <button
+                  key={tab.type}
+                  type="button"
+                  onClick={() => {
+                    setForm((current) => ({
+                      ...current,
+                      type: tab.type,
+                    }));
+                    setFile(null);
+                    setError("");
+                  }}
+                  className={[
+                    "rounded-lg px-3 py-2.5 text-sm font-black transition",
+                    active
+                      ? "bg-blue-500 text-white"
+                      : "text-slate-400 hover:bg-white/[0.05] hover:text-white",
+                  ].join(" ")}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {fileMode && (
+            <div
+              onDragEnter={(event) => {
+                event.preventDefault();
+                setDragActive(true);
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setDragActive(true);
+              }}
+              onDragLeave={(event) => {
+                event.preventDefault();
+                setDragActive(false);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDragActive(false);
+
+                const droppedFile = event.dataTransfer.files[0];
+
+                if (droppedFile) {
+                  handleFile(droppedFile);
+                }
+              }}
+              className={[
+                "mt-5 flex min-h-[190px] cursor-pointer items-center justify-center rounded-xl border border-dashed p-6 text-center transition",
+                dragActive
+                  ? "border-cyan-400 bg-cyan-500/10"
+                  : "border-white/15 bg-[#0B0D10] hover:border-cyan-500/40 hover:bg-cyan-500/[0.04]",
+              ].join(" ")}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <div>
+                <Upload className="mx-auto h-10 w-10 text-cyan-300" />
+
+                <p className="mt-3 text-lg font-black text-white">
+                  {file
+                    ? file.name
+                    : `Drop ${assetTypeLabel(form.type)} here`}
+                </p>
+
+                <p className="mt-2 text-sm font-semibold text-slate-500">
+                  {file
+                    ? `${formatFileSize(file.size)} selected`
+                    : `or click to choose a ${assetTypeLabel(form.type)} file`}
+                </p>
+
+                {mode === "edit" && !file && (
+                  <p className="mt-2 text-xs font-semibold text-slate-600">
+                    Leave empty to keep the current file.
+                  </p>
+                )}
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={
+                  form.type === "pdf"
+                    ? "application/pdf,.pdf"
+                    : "image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif"
+                }
+                className="hidden"
+                onChange={(event) => {
+                  const selectedFile = event.target.files?.[0];
+
+                  if (selectedFile) {
+                    handleFile(selectedFile);
+                  }
+                }}
+              />
+            </div>
+          )}
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <label className="block md:col-span-2">
+              <span className="mb-2 block text-sm font-bold text-slate-300">
+                Brand Page
+              </span>
+
+              <select
+                value={form.contentPageId}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    contentPageId: event.target.value,
+                  }))
+                }
+                className="w-full rounded-lg border border-white/10 bg-[#0B0D10] px-4 py-3.5 text-sm font-semibold text-white outline-none transition focus:border-cyan-500/70"
+              >
+                <option value="">Choose brand page</option>
+
+                {pages.map((page) => (
+                  <option key={page.id} value={page.id}>
+                    {page.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <TextField
+              label="Title"
+              value={form.title}
+              placeholder="Example: Maya Character Reference"
+              onChange={(value) =>
+                setForm((current) => ({ ...current, title: value }))
+              }
+            />
+
+            <TextField
+              label="Description"
+              value={form.description}
+              placeholder="What is this asset for?"
+              onChange={(value) =>
+                setForm((current) => ({ ...current, description: value }))
+              }
+            />
+          </div>
+
+          {form.type === "text" && (
+            <div className="mt-4">
+              <TextArea
+                label="Text Content"
+                value={form.content}
+                placeholder="Paste text asset here..."
+                rows={8}
+                onChange={(value) =>
+                  setForm((current) => ({ ...current, content: value }))
+                }
+              />
+            </div>
+          )}
+
+          {error && (
+            <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm font-semibold text-red-300">
+              {error}
+            </div>
+          )}
+
+          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-black text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving && <LoaderCircle className="h-4 w-4 animate-spin" />}
+              {saving
+                ? "Saving..."
+                : mode === "create"
+                  ? "Save Asset"
+                  : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function UnavailablePreview() {
+  return (
+    <div className="flex h-full items-center justify-center p-8 text-center">
+      <div>
+        <FileText className="mx-auto h-14 w-14 text-slate-600" />
+        <p className="mt-4 text-lg font-black text-white">
+          Preview unavailable
+        </p>
+        <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+          The signed preview link expired or could not be created. Refresh the
+          page to generate a new preview link.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmModal({
+  confirm,
+  busy,
+  onClose,
+}: {
+  confirm: ConfirmState;
+  busy: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#111318] p-6 shadow-2xl shadow-black/50">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+              Confirm Action
+            </p>
+
+            <h3 className="mt-2 text-2xl font-black leading-tight text-white">
+              {confirm.title}
+            </h3>
+          </div>
+
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <X className="h-4.5 w-4.5" />
+          </button>
+        </div>
+
+        <p className="mt-4 text-sm leading-7 text-slate-400">
+          {confirm.description}
+        </p>
+
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-black text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={() => void confirm.onConfirm()}
+            disabled={busy}
+            className="flex items-center justify-center gap-2 rounded-lg border border-red-500/25 bg-red-500/15 px-5 py-3 text-sm font-black text-red-200 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
+            {busy ? "Working..." : confirm.actionLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TextField({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-bold text-slate-300">
+        {label}
+      </span>
+
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-white/10 bg-[#0B0D10] px-4 py-3.5 text-sm font-semibold text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500/70"
+      />
+    </label>
+  );
+}
+
+function TextArea({
+  label,
+  value,
+  placeholder,
+  rows,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  rows: number;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-bold text-slate-300">
+        {label}
+      </span>
+
+      <textarea
+        value={value}
+        rows={rows}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="w-full resize-y rounded-lg border border-white/10 bg-[#0B0D10] px-4 py-3.5 text-sm font-semibold leading-7 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500/70"
+      />
+    </label>
+  );
+}
+
+function NoticeCard({
+  tone,
+  title,
+  children,
+}: {
+  tone: "success" | "error";
+  title: string;
+  children: string;
+}) {
+  const style =
+    tone === "error"
+      ? "border-red-500/20 bg-red-500/10 text-red-300"
+      : "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
+
+  return (
+    <div className={["rounded-xl border p-4", style].join(" ")}>
+      <p className="text-sm font-black capitalize">{title}</p>
+      <p className="mt-1 text-sm font-semibold opacity-90">{children}</p>
+    </div>
+  );
+}
+
+function LoadingFolders() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div
+          key={index}
+          className="h-[128px] animate-pulse rounded-xl border border-white/10 bg-[#0B0D10]"
+        />
+      ))}
+    </div>
+  );
+}
+
+function LoadingAssets() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div
+          key={index}
+          className="h-[112px] animate-pulse rounded-xl border border-white/10 bg-[#0B0D10]"
+        />
+      ))}
+    </div>
+  );
+}
+
+function EmptySmallState({
   title,
   description,
 }: {
@@ -481,42 +1334,131 @@ function EmptyState({
   description: string;
 }) {
   return (
-    <div className="flex min-h-[260px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-[#0B0D10] p-10 text-center">
+    <div className="rounded-xl border border-dashed border-white/10 bg-[#0B0D10] p-5 text-center">
+      <FolderOpen className="mx-auto h-8 w-8 text-slate-600" />
+      <p className="mt-3 text-sm font-semibold text-white">{title}</p>
+      <p className="mt-1 text-xs text-slate-500">{description}</p>
+    </div>
+  );
+}
+
+function EmptyAssetList({
+  isAdmin,
+  type,
+  onAdd,
+}: {
+  isAdmin: boolean;
+  type: AssetType;
+  onAdd: () => void;
+}) {
+  return (
+    <div className="flex min-h-[260px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-[#0B0D10] p-8 text-center">
       <div>
-        <FolderOpen className="mx-auto h-10 w-10 text-slate-600" />
-        <p className="mt-3 font-semibold text-white">{title}</p>
-        <p className="mt-1 max-w-md text-sm text-slate-500">{description}</p>
+        <FileText className="mx-auto h-10 w-10 text-slate-600" />
+        <p className="mt-3 font-semibold text-white">
+          No {assetTypeLabel(type)} assets yet
+        </p>
+        <p className="mt-1 text-sm text-slate-500">
+          {isAdmin
+            ? `Add the first ${assetTypeLabel(type)} asset for this Brand Page.`
+            : `No ${assetTypeLabel(type)} assets have been added to this folder yet.`}
+        </p>
+
+        {isAdmin && (
+          <button
+            onClick={onAdd}
+            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-black text-white transition hover:bg-blue-400"
+          >
+            <Plus className="h-4 w-4" />
+            Add {assetTypeLabel(type)}
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function assetTypeBadge(type: AssetItem["type"]) {
+function assetTypeBadge(type: AssetType) {
   switch (type) {
-    case "prompt":
+    case "image":
       return "border-violet-500/20 bg-violet-500/10 text-violet-300";
+    case "text":
+      return "border-amber-500/20 bg-amber-500/10 text-amber-300";
     case "pdf":
       return "border-blue-500/20 bg-blue-500/10 text-blue-300";
-    case "doc":
-      return "border-amber-500/20 bg-amber-500/10 text-amber-300";
-    case "image":
-      return "border-cyan-500/20 bg-cyan-500/10 text-cyan-300";
     default:
       return "border-white/10 bg-white/5 text-slate-300";
   }
 }
 
-function assetLeftGradient(type: AssetItem["type"]) {
+function assetTypeLabel(type: AssetType) {
   switch (type) {
-    case "prompt":
-      return "from-violet-400 via-violet-500 to-blue-500";
-    case "pdf":
-      return "from-blue-400 via-blue-500 to-cyan-500";
-    case "doc":
-      return "from-amber-400 via-orange-500 to-red-500";
     case "image":
-      return "from-cyan-400 via-cyan-500 to-blue-500";
+      return "Image";
+    case "text":
+      return "Text";
+    case "pdf":
+      return "PDF";
     default:
-      return "from-slate-400 via-slate-500 to-slate-600";
+      return "Asset";
   }
+}
+
+function pageName(asset: AssetDbItem) {
+  return asset.content_page?.name ?? "Unknown Page";
+}
+
+function validateLocalFile(type: AssetType, file: File) {
+  if (type === "pdf") {
+    const isPdf =
+      file.type === "application/pdf" ||
+      file.name.toLowerCase().endsWith(".pdf");
+
+    if (!isPdf) {
+      return "Only PDF files are allowed.";
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      return "PDF must be 50MB or smaller.";
+    }
+  }
+
+  if (type === "image") {
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    const allowedExtensions = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+    const lowerName = file.name.toLowerCase();
+
+    const validExtension = allowedExtensions.some((extension) =>
+      lowerName.endsWith(extension),
+    );
+
+    if (!allowedTypes.includes(file.type) && !validExtension) {
+      return "Only JPG, PNG, WEBP, or GIF images are allowed.";
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      return "Image must be 20MB or smaller.";
+    }
+  }
+
+  return "";
+}
+
+function formatFileSize(size: number) {
+  if (!size) {
+    return "0 KB";
+  }
+
+  const units = ["B", "KB", "MB", "GB"];
+  let value = size;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${
+    units[unitIndex]
+  }`;
 }

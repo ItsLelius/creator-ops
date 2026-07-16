@@ -33,18 +33,24 @@ export function CalendarPage({ onOpenSidebar }: CalendarPageProps) {
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
 
   const brands = useMemo(() => {
-    return Array.from(new Set(calendarPosts.map((post) => post.brand)));
+    return Array.from(new Set(calendarPosts.map((post) => post.brand))).sort();
   }, []);
 
   const platforms = useMemo(() => {
-    return Array.from(new Set(calendarPosts.map((post) => post.platform)));
+    return Array.from(
+      new Set(calendarPosts.map((post) => post.platform)),
+    ).sort();
   }, []);
 
   const filteredPosts = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
     return calendarPosts.filter((post) => {
-      const matchesSearch = post.title
-        .toLowerCase()
-        .includes(search.toLowerCase());
+      const matchesSearch =
+        !query ||
+        post.title.toLowerCase().includes(query) ||
+        post.brand.toLowerCase().includes(query) ||
+        post.platform.toLowerCase().includes(query);
 
       const matchesBrand = brandFilter === "all" || post.brand === brandFilter;
 
@@ -77,23 +83,33 @@ export function CalendarPage({ onOpenSidebar }: CalendarPageProps) {
   }, [filteredPosts]);
 
   const selectedPost = useMemo(() => {
-    return calendarPosts.find((post) => post.id === selectedPostId) ?? null;
-  }, [selectedPostId]);
+    return filteredPosts.find((post) => post.id === selectedPostId) ?? null;
+  }, [filteredPosts, selectedPostId]);
 
   const selectedDatePosts = useMemo(() => {
-    if (!selectedDateKey) return [];
+    if (!selectedDateKey) {
+      return [];
+    }
 
-    return filteredPosts.filter((post) => {
-      return dateKey(new Date(post.date)) === selectedDateKey;
-    });
+    return filteredPosts
+      .filter((post) => dateKey(new Date(post.date)) === selectedDateKey)
+      .sort((a, b) => a.title.localeCompare(b.title));
   }, [filteredPosts, selectedDateKey]);
 
-  const scheduledCount = calendarPosts.filter(
+  const scheduledCount = filteredPosts.filter(
     (post) => post.status === "scheduled",
   ).length;
 
-  const readyCount = calendarPosts.filter((post) => post.status === "ready")
+  const readyCount = filteredPosts.filter((post) => post.status === "ready")
     .length;
+
+  const postedCount = filteredPosts.filter((post) => post.status === "posted")
+    .length;
+
+  function clearSelection() {
+    setSelectedPostId(null);
+    setSelectedDateKey(null);
+  }
 
   function handleEventClick(info: EventClickArg) {
     info.jsEvent.preventDefault();
@@ -109,13 +125,14 @@ export function CalendarPage({ onOpenSidebar }: CalendarPageProps) {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Calendar"
-        description="Posting schedule by page name, platform, and upload time."
+        description="Compact posting calendar with small pills so each date stays clean and balanced."
         onOpenSidebar={onOpenSidebar}
+        accent="blue"
         pills={[
           {
             icon: CalendarDays,
-            value: calendarPosts.length,
-            label: "Calendar posts",
+            value: filteredPosts.length,
+            label: "Visible posts",
             accent: "blue",
           },
           {
@@ -130,24 +147,29 @@ export function CalendarPage({ onOpenSidebar }: CalendarPageProps) {
             label: "Ready",
             accent: "emerald",
           },
+          {
+            icon: Video,
+            value: postedCount,
+            label: "Posted",
+            accent: "amber",
+          },
         ]}
       />
 
-      <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/10 bg-[#111318] p-5">
-        <div className="mb-5 rounded-2xl border border-white/5 bg-[#171A21] p-3">
+      <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-white/10 bg-[#111318] p-5">
+        <div className="mb-5 rounded-xl border border-white/10 bg-[#171A21] p-3">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.4fr_1fr_1fr_1fr]">
-            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#0B0D10] px-3 py-2.5">
-              <Search className="h-4 w-4 text-slate-500" />
+            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#0B0D10] px-3 py-2.5">
+              <Search className="h-4 w-4 shrink-0 text-slate-500" />
 
               <input
                 value={search}
                 onChange={(event) => {
                   setSearch(event.target.value);
-                  setSelectedPostId(null);
-                  setSelectedDateKey(null);
+                  clearSelection();
                 }}
                 placeholder="Search scheduled content..."
-                className="w-full bg-transparent text-sm text-slate-300 outline-none placeholder:text-slate-600"
+                className="w-full min-w-0 bg-transparent text-sm font-semibold text-slate-300 outline-none placeholder:text-slate-600"
               />
             </div>
 
@@ -155,8 +177,7 @@ export function CalendarPage({ onOpenSidebar }: CalendarPageProps) {
               value={brandFilter}
               onChange={(value) => {
                 setBrandFilter(value);
-                setSelectedPostId(null);
-                setSelectedDateKey(null);
+                clearSelection();
               }}
               options={[
                 { label: "All Pages", value: "all" },
@@ -168,8 +189,7 @@ export function CalendarPage({ onOpenSidebar }: CalendarPageProps) {
               value={platformFilter}
               onChange={(value) => {
                 setPlatformFilter(value);
-                setSelectedPostId(null);
-                setSelectedDateKey(null);
+                clearSelection();
               }}
               options={[
                 { label: "All Platforms", value: "all" },
@@ -184,8 +204,7 @@ export function CalendarPage({ onOpenSidebar }: CalendarPageProps) {
               value={statusFilter}
               onChange={(value) => {
                 setStatusFilter(value as "all" | CalendarPostStatus);
-                setSelectedPostId(null);
-                setSelectedDateKey(null);
+                clearSelection();
               }}
               options={[
                 { label: "All Status", value: "all" },
@@ -209,21 +228,28 @@ export function CalendarPage({ onOpenSidebar }: CalendarPageProps) {
               }
               initialView="dayGridMonth"
               height="100%"
+              fixedWeekCount
+              showNonCurrentDates
               events={calendarEvents}
               eventContent={renderEventContent}
               eventClick={handleEventClick}
               dateClick={(info) => {
-                setSelectedDateKey(info.dateStr);
+                setSelectedDateKey(dateKey(info.date));
                 setSelectedPostId(null);
               }}
-              dayMaxEvents={2}
-              moreLinkText={(count) => `+${count} more`}
+              dayMaxEventRows={3}
+              moreLinkContent={(args) => (
+                <span className="text-[10px] font-black text-blue-300">
+                  +{args.num} more
+                </span>
+              )}
               moreLinkClick={(info) => {
                 setSelectedDateKey(dateKey(info.date));
                 setSelectedPostId(null);
 
-                return "timeGridDay";
+                return "popover";
               }}
+              eventOrder="start,title"
               nowIndicator
               headerToolbar={{
                 left: "prev,next today",
@@ -236,6 +262,8 @@ export function CalendarPage({ onOpenSidebar }: CalendarPageProps) {
                 week: "Week",
                 day: "Day",
               }}
+              slotMinTime="06:00:00"
+              slotMaxTime="23:00:00"
             />
           </div>
 
@@ -266,20 +294,14 @@ function renderEventContent(eventInfo: EventContentArg) {
   const time = eventInfo.event.extendedProps.time as string;
 
   return (
-    <div
-      className={[
-        "w-full min-w-0 rounded-md border px-2 py-1 text-left transition",
-        brandEventStyle(post.brand),
-      ].join(" ")}
-    >
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <span className="truncate text-[11px] font-bold">{shortBrand(post.brand)}</span>
-        <span className="shrink-0 rounded-full bg-black/20 px-1.5 py-0.5 text-[10px] font-semibold">
-          {time}
-        </span>
-      </div>
+    <div className="flex h-[18px] w-full min-w-0 items-center gap-1 overflow-hidden rounded-md border border-blue-500/20 bg-blue-500/10 px-1.5 text-blue-100 transition hover:bg-blue-500/20">
+      <span className="shrink-0 text-[9px] font-black leading-none text-blue-300">
+        {compactTime(time)}
+      </span>
 
-      <p className="mt-0.5 truncate text-[11px] opacity-90">{post.title}</p>
+      <span className="min-w-0 truncate text-[10px] font-bold leading-none">
+        {post.title}
+      </span>
     </div>
   );
 }
@@ -317,11 +339,11 @@ function DaySchedulePanel({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="border-b border-white/10 bg-[#111318] p-5">
-        <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-300">
+        <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-blue-300">
           Day Schedule
         </span>
 
-        <h3 className="mt-3 text-lg font-bold text-white">{dateLabel}</h3>
+        <h3 className="mt-3 text-lg font-black text-white">{dateLabel}</h3>
 
         <p className="mt-1 text-sm text-slate-500">
           {posts.length} posting item{posts.length === 1 ? "" : "s"} scheduled.
@@ -346,13 +368,8 @@ function DaySchedulePanel({
             {Object.entries(groupedByBrand).map(([brand, brandPosts]) => (
               <section key={brand}>
                 <div className="mb-3 flex items-center gap-2">
-                  <span
-                    className={[
-                      "h-2.5 w-2.5 rounded-full",
-                      brandDotStyle(brand),
-                    ].join(" ")}
-                  />
-                  <h4 className="text-sm font-bold text-white">{brand}</h4>
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-400" />
+                  <h4 className="text-sm font-black text-white">{brand}</h4>
                   <span className="text-xs text-slate-500">
                     {brandPosts.length} item{brandPosts.length === 1 ? "" : "s"}
                   </span>
@@ -363,21 +380,22 @@ function DaySchedulePanel({
                     <button
                       key={post.id}
                       onClick={() => onSelectPost(post)}
-                      className="w-full rounded-xl border border-white/10 bg-[#0B0D10] p-3 text-left transition hover:border-white/20 hover:bg-[#14171d]"
+                      className="w-full rounded-xl border border-white/10 bg-[#111318] p-3 text-left transition hover:border-white/20 hover:bg-[#171A21]"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="line-clamp-2 text-sm font-semibold text-white">
+                          <p className="line-clamp-2 text-sm font-black leading-snug text-white">
                             {post.title}
                           </p>
-                          <p className="mt-1 text-xs text-slate-500">
+
+                          <p className="mt-1 text-xs font-semibold text-slate-500">
                             {post.platform}
                           </p>
                         </div>
 
                         <span
                           className={[
-                            "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                            "shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-black",
                             calendarStatusBadge(post.status),
                           ].join(" ")}
                         >
@@ -389,7 +407,7 @@ function DaySchedulePanel({
                         {post.times.map((time) => (
                           <span
                             key={time}
-                            className="rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-300"
+                            className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-xs font-black text-blue-300"
                           >
                             {time}
                           </span>
@@ -417,16 +435,23 @@ function PostDetailPanel({ post }: { post: CalendarPost }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className={["p-5", brandHeaderStyle(post.brand)].join(" ")}>
-        <span className="rounded-full bg-black/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white/90">
+      <div className="border-b border-white/10 bg-[#111318] p-5">
+        <span
+          className={[
+            "rounded-lg border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide",
+            calendarStatusBadge(post.status),
+          ].join(" ")}
+        >
           {calendarStatusLabel(post.status)}
         </span>
 
-        <h3 className="mt-3 break-words text-base font-bold leading-snug text-white">
+        <h3 className="mt-3 break-words text-xl font-black leading-snug text-white">
           {post.title}
         </h3>
 
-        <p className="mt-1 text-sm text-white/80">{post.brand}</p>
+        <p className="mt-2 text-sm font-semibold text-slate-400">
+          {post.brand}
+        </p>
       </div>
 
       <div className="scroll-panel min-h-0 flex-1 overflow-y-auto p-5">
@@ -435,7 +460,7 @@ function PostDetailPanel({ post }: { post: CalendarPost }) {
           <DetailRow icon={Video} label="Platform" value={post.platform} />
 
           <div>
-            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-wide text-slate-500">
               <Clock className="h-3.5 w-3.5" />
               Posting Time
             </div>
@@ -444,7 +469,7 @@ function PostDetailPanel({ post }: { post: CalendarPost }) {
               {post.times.map((time) => (
                 <span
                   key={time}
-                  className="rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-300"
+                  className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-black text-blue-300"
                 >
                   {time}
                 </span>
@@ -453,10 +478,11 @@ function PostDetailPanel({ post }: { post: CalendarPost }) {
           </div>
 
           <div className="rounded-xl border border-white/10 bg-[#111318] p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
               Status
             </p>
-            <p className="mt-1 text-sm font-semibold text-white">
+
+            <p className="mt-1 text-sm font-bold text-white">
               {calendarStatusLabel(post.status)}
             </p>
           </div>
@@ -471,9 +497,7 @@ function EmptyCalendarPanel() {
     <div className="flex flex-1 items-center justify-center p-6 text-center">
       <div>
         <CalendarDays className="mx-auto h-8 w-8 text-slate-600" />
-        <p className="mt-3 font-semibold text-white">
-          Select a post or day
-        </p>
+        <p className="mt-3 font-semibold text-white">Select a post or day</p>
         <p className="mt-1 text-sm text-slate-500">
           Click a calendar item for details, or click a day to see its full
           posting schedule.
@@ -499,10 +523,8 @@ function DetailRow({
       </div>
 
       <div className="min-w-0">
-        <p className="text-xs text-slate-500">{label}</p>
-        <p className="mt-0.5 truncate text-sm font-semibold text-white">
-          {value}
-        </p>
+        <p className="text-xs font-semibold text-slate-500">{label}</p>
+        <p className="mt-0.5 truncate text-sm font-bold text-white">{value}</p>
       </div>
     </div>
   );
@@ -535,10 +557,8 @@ function dateKey(date: Date) {
   )}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function shortBrand(brand: string) {
-  if (brand === "Maya's Kitchen") return "Maya";
-  if (brand === "Chef Marrow") return "Marrow";
-  return brand;
+function compactTime(time: string) {
+  return time.replace(":00", "").replace(" ", "");
 }
 
 function calendarStatusLabel(status: CalendarPostStatus) {
@@ -559,53 +579,14 @@ function calendarStatusLabel(status: CalendarPostStatus) {
 function calendarStatusBadge(status: CalendarPostStatus) {
   switch (status) {
     case "ready":
-      return "bg-emerald-500/10 text-emerald-300";
+      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
     case "scheduled":
-      return "bg-violet-500/10 text-violet-300";
+      return "border-violet-500/20 bg-violet-500/10 text-violet-300";
     case "posted":
-      return "bg-green-500/10 text-green-300";
+      return "border-green-500/20 bg-green-500/10 text-green-300";
     case "missed":
-      return "bg-red-500/10 text-red-300";
+      return "border-red-500/20 bg-red-500/10 text-red-300";
     default:
-      return "bg-slate-500/10 text-slate-300";
-  }
-}
-
-function brandEventStyle(brand: string) {
-  switch (brand) {
-    case "Maya's Kitchen":
-      return "border-emerald-500/25 bg-emerald-500/12 text-emerald-100";
-    case "Chef Marrow":
-      return "border-amber-500/25 bg-amber-500/12 text-amber-100";
-    case "Noutrix":
-      return "border-cyan-500/25 bg-cyan-500/12 text-cyan-100";
-    default:
-      return "border-blue-500/25 bg-blue-500/12 text-blue-100";
-  }
-}
-
-function brandDotStyle(brand: string) {
-  switch (brand) {
-    case "Maya's Kitchen":
-      return "bg-emerald-400";
-    case "Chef Marrow":
-      return "bg-amber-400";
-    case "Noutrix":
-      return "bg-cyan-400";
-    default:
-      return "bg-blue-400";
-  }
-}
-
-function brandHeaderStyle(brand: string) {
-  switch (brand) {
-    case "Maya's Kitchen":
-      return "bg-gradient-to-br from-emerald-600/90 to-emerald-700/90";
-    case "Chef Marrow":
-      return "bg-gradient-to-br from-amber-600/90 to-orange-700/90";
-    case "Noutrix":
-      return "bg-gradient-to-br from-cyan-600/90 to-blue-700/90";
-    default:
-      return "bg-gradient-to-br from-blue-600/90 to-blue-700/90";
+      return "border-white/10 bg-white/5 text-slate-300";
   }
 }

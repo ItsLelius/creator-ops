@@ -22,6 +22,16 @@ export type PageKey =
   | "employees"
   | "profile";
 
+export type SidebarItem = {
+  key: PageKey;
+  label: string;
+  icon: LucideIcon;
+};
+
+/* -------------------------------------------------------------------------- */
+/* Legacy mock-data types                                                     */
+/* -------------------------------------------------------------------------- */
+
 export type TaskStatus =
   | "to_generate"
   | "in_progress"
@@ -50,12 +60,6 @@ export type Employee = {
   role: "Admin" | "Employee";
   status: "Online" | "Offline";
   lastSeen: string;
-};
-
-export type SidebarItem = {
-  key: PageKey;
-  label: string;
-  icon: LucideIcon;
 };
 
 export type UploadDetails = {
@@ -106,9 +110,9 @@ export type ContentIdea = {
   createdAt: string;
 };
 
-export type AssetType = "pdf" | "prompt" | "image" | "doc";
+export type LegacyAssetType = "pdf" | "prompt" | "image" | "doc";
 
-export type AssetCategory =
+export type LegacyAssetCategory =
   | "pdf_brain"
   | "prompts"
   | "images"
@@ -118,14 +122,18 @@ export type AssetItem = {
   id: string;
   title: string;
   brand: string;
-  category: AssetCategory;
-  type: AssetType;
+  category: LegacyAssetCategory;
+  type: LegacyAssetType;
   content?: string;
   fileUrl?: string;
   imageUrl?: string;
   description: string;
   uploadedAt: string;
 };
+
+/* -------------------------------------------------------------------------- */
+/* Brand Pages                                                                */
+/* -------------------------------------------------------------------------- */
 
 export type ContentPageStatus = "active" | "archived";
 
@@ -141,6 +149,74 @@ export type ContentPageDbItem = {
   created_at: string;
   updated_at: string;
 };
+
+/* -------------------------------------------------------------------------- */
+/* Content Ideas DB                                                           */
+/* -------------------------------------------------------------------------- */
+
+export type ContentIdeaPage = {
+  id: string;
+  name: string;
+  platform: string;
+  page_url: string;
+  niche: string;
+  status: ContentPageStatus;
+};
+
+export type ContentIdeaDbItem = {
+  id: string;
+  content_page_id: string;
+  title: string;
+  category: string;
+  source_name: string;
+  source_url: string;
+  hook: string;
+  notes: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  content_page?: ContentIdeaPage | null;
+};
+
+/* -------------------------------------------------------------------------- */
+/* Asset Library DB                                                           */
+/* -------------------------------------------------------------------------- */
+
+export type AssetType = "image" | "text" | "pdf";
+
+export type AssetCategory = AssetType;
+
+export type AssetContentPage = {
+  id: string;
+  name: string;
+  platform: string;
+  page_url: string;
+  niche: string;
+  status: ContentPageStatus;
+};
+
+export type AssetDbItem = {
+  id: string;
+  content_page_id: string;
+  title: string;
+  category: AssetCategory;
+  type: AssetType;
+  content: string;
+  description: string;
+  file_path: string | null;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  file_url: string | null;
+  content_page?: AssetContentPage | null;
+};
+
+/* -------------------------------------------------------------------------- */
+/* To Do / Production DB                                                      */
+/* -------------------------------------------------------------------------- */
 
 export type ToDoStatus = "assigned" | "in_progress" | "done";
 
@@ -165,7 +241,7 @@ export type TodoDbStatus =
   | "approved"
   | "done"
   | "posted";
-  
+
 export type TodoAssigneeProfile = {
   id: string;
   name: string;
@@ -203,4 +279,3 @@ export type TodoDbItem = {
   assignee?: TodoAssigneeProfile | null;
   content_page?: TodoContentPage | null;
 };
-
