@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+:root {
+  --bg-page: #0a0a0a;
+  --bg-surface: #161616;
+  --bg-surface-alt: #1c1c1e;
+  --bg-elevated: #202022;
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+
+  --text-primary: #f5f5f5;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #6b7280;
+
+  --accent-blue: #3b82f6;
+  --accent-red: #f43f5e;
+
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+
+
 .scroll-panel::-webkit-scrollbar {
   width: 6px;
 }
