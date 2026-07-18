@@ -285,15 +285,19 @@ export function BrandPagesPage({ onOpenSidebar }: BrandPagesPageProps) {
         </div>
       )}
 
-      <section className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-[#111318] p-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-black uppercase tracking-wide text-slate-300">
+      <section className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-[#111318] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.18)]">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300/80">
+                Brand Directory
+              </p>
+
+              <h2 className="mt-2 text-lg font-black tracking-tight text-white">
                 Pages
               </h2>
 
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs font-medium leading-5 text-slate-600">
                 Used by To Do List brand dropdown.
               </p>
             </div>
@@ -302,7 +306,7 @@ export function BrandPagesPage({ onOpenSidebar }: BrandPagesPageProps) {
               <button
                 onClick={() => void loadPages()}
                 disabled={loading}
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-[#171A20] hover:text-white hover:shadow-[0_8px_22px_rgba(0,0,0,0.18)] disabled:cursor-not-allowed disabled:opacity-60"
                 title="Refresh"
               >
                 <RefreshCw
@@ -318,7 +322,7 @@ export function BrandPagesPage({ onOpenSidebar }: BrandPagesPageProps) {
                   setCreateModalOpen(true);
                   setNotice(null);
                 }}
-                className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500 text-white transition hover:bg-blue-400"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-500/20 bg-cyan-500/10 text-cyan-200 transition hover:bg-cyan-500/20"
                 title="Add brand page"
               >
                 <Plus className="h-4 w-4" />
@@ -326,14 +330,14 @@ export function BrandPagesPage({ onOpenSidebar }: BrandPagesPageProps) {
             </div>
           </div>
 
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-white/10 bg-[#0B0D10] px-3 py-2.5">
-            <Search className="h-4 w-4 shrink-0 text-slate-500" />
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-white/10 bg-[#0B0D10] px-3 py-2.5 transition focus-within:border-cyan-500/60">
+            <Search className="h-4 w-4 shrink-0 text-slate-600" />
 
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search pages..."
-              className="w-full min-w-0 bg-transparent text-sm font-semibold text-slate-300 outline-none placeholder:text-slate-600"
+              className="w-full min-w-0 bg-transparent text-sm font-medium text-slate-300 outline-none placeholder:text-slate-700"
             />
           </div>
 
@@ -343,7 +347,7 @@ export function BrandPagesPage({ onOpenSidebar }: BrandPagesPageProps) {
             ) : filteredPages.length === 0 ? (
               <EmptyPages />
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {filteredPages.map((page) => (
                   <PageListCard
                     key={page.id}
@@ -357,7 +361,7 @@ export function BrandPagesPage({ onOpenSidebar }: BrandPagesPageProps) {
           </div>
         </aside>
 
-        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#111318]">
+        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#111318] shadow-[0_16px_40px_rgba(0,0,0,0.18)]">
           {selectedPage ? (
             <PageDetail
               page={selectedPage}
@@ -369,7 +373,7 @@ export function BrandPagesPage({ onOpenSidebar }: BrandPagesPageProps) {
           ) : (
             <div className="flex flex-1 items-center justify-center p-10 text-center">
               <div>
-                <Layers className="mx-auto h-10 w-10 text-slate-600" />
+                <Layers className="mx-auto h-10 w-10 text-slate-700" />
                 <p className="mt-3 font-semibold text-white">
                   Select a brand page
                 </p>
@@ -410,76 +414,6 @@ export function BrandPagesPage({ onOpenSidebar }: BrandPagesPageProps) {
   );
 }
 
-function ConfirmModal({
-  confirm,
-  busy,
-  onClose,
-}: {
-  confirm: ConfirmState;
-  busy: boolean;
-  onClose: () => void;
-}) {
-  const toneStyle = {
-    amber:
-      "border-amber-500/20 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20",
-    emerald:
-      "border-emerald-500/20 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20",
-    red: "border-red-500/25 bg-red-500/15 text-red-200 hover:bg-red-500/25",
-  };
-
-  return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#111318] p-6 shadow-2xl shadow-black/50">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
-              Confirm Action
-            </p>
-
-            <h3 className="mt-2 text-2xl font-black leading-tight text-white">
-              {confirm.title}
-            </h3>
-          </div>
-
-          <button
-            onClick={onClose}
-            disabled={busy}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <X className="h-4.5 w-4.5" />
-          </button>
-        </div>
-
-        <p className="mt-4 text-sm leading-7 text-slate-400">
-          {confirm.description}
-        </p>
-
-        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <button
-            onClick={onClose}
-            disabled={busy}
-            className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-black text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Cancel
-          </button>
-
-          <button
-            onClick={() => void confirm.onConfirm()}
-            disabled={busy}
-            className={[
-              "flex items-center justify-center gap-2 rounded-lg border px-5 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60",
-              toneStyle[confirm.tone],
-            ].join(" ")}
-          >
-            {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
-            {busy ? "Working..." : confirm.actionLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function PageListCard({
   page,
   selected,
@@ -495,20 +429,21 @@ function PageListCard({
     <button
       onClick={onClick}
       className={[
-        "group relative w-full overflow-hidden rounded-xl border p-4 text-left transition",
+        "group relative w-full overflow-hidden rounded-lg border p-4 text-left transition duration-200",
         selected
-          ? "border-cyan-500/45 bg-cyan-500/[0.065] ring-1 ring-cyan-500/30"
-          : "border-white/10 bg-[#0B0D10] hover:border-white/20 hover:bg-[#14171D]",
+          ? "border-white/15 bg-[#1A1D24] shadow-[0_12px_28px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.045)]"
+          : "border-white/10 bg-[#0B0D10] hover:border-white/15 hover:bg-[#171A20] hover:shadow-[0_8px_22px_rgba(0,0,0,0.18)]",
         archived ? "opacity-70" : "",
       ].join(" ")}
     >
-
       <span
         className={[
-          "absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b",
+          "absolute bottom-0 left-0 top-0 w-1",
           archived
-            ? "from-slate-500 via-slate-600 to-slate-700"
-            : "from-cyan-400 via-blue-500 to-violet-600",
+            ? "bg-slate-600"
+            : selected
+              ? "bg-cyan-300"
+              : "bg-white/10 group-hover:bg-cyan-400/60",
         ].join(" ")}
       />
 
@@ -549,7 +484,7 @@ function PageDetail({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b border-white/10 bg-[#111318] p-5">
+      <div className="shrink-0 border-b border-white/10 bg-[radial-gradient(circle_at_0%_0%,rgba(6,182,212,0.12),transparent_34%),linear-gradient(135deg,#111318,#0B0D10)] p-5">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -564,7 +499,7 @@ function PageDetail({
               </span>
             </div>
 
-            <h2 className="mt-3 break-words text-3xl font-black leading-tight text-white">
+            <h2 className="mt-4 break-words text-3xl font-black leading-tight tracking-tight text-white">
               {page.name}
             </h2>
 
@@ -577,7 +512,7 @@ function PageDetail({
           <div className="flex shrink-0 flex-wrap gap-2">
             <button
               onClick={() => onEdit(page)}
-              className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-bold text-slate-300 transition hover:bg-white/[0.06] hover:text-white"
+              className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-bold text-slate-300 transition hover:bg-[#171A20] hover:text-white"
             >
               <Edit3 className="h-4 w-4" />
               Edit
@@ -622,14 +557,17 @@ function PageDetail({
       </div>
 
       <div className="scroll-panel min-h-0 flex-1 overflow-y-auto p-5">
-        <div className="mx-auto max-w-5xl space-y-5">
-          <InfoBlock label="Page Name" value={page.name} />
-          <InfoBlock label="Platform" value={page.platform} />
+        <div className="mx-auto max-w-5xl space-y-4">
+          <div className="grid gap-4 xl:grid-cols-2">
+            <InfoBlock label="Page Name" value={page.name} />
+            <InfoBlock label="Platform" value={page.platform} />
+          </div>
+
           <InfoBlock label="Niche" value={page.niche || "Nothing added yet."} />
 
           <section className="rounded-xl border border-white/10 bg-[#0B0D10] p-5">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-black uppercase tracking-wide text-white">
+              <p className="text-xs font-black uppercase tracking-wide text-slate-400">
                 Page URL
               </p>
 
@@ -638,7 +576,7 @@ function PageDetail({
                   href={page.page_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-white/[0.1]"
+                  className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-bold text-slate-300 transition hover:bg-[#171A20] hover:text-white"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
                   Open
@@ -724,13 +662,13 @@ function PageFormModal(props: PageFormModalProps) {
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
       <div className="w-full max-w-2xl overflow-hidden rounded-xl border border-white/10 bg-[#111318] shadow-2xl shadow-black/50">
-        <div className="flex items-start justify-between gap-4 border-b border-white/10 p-6">
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-[radial-gradient(circle_at_0%_0%,rgba(6,182,212,0.12),transparent_38%),linear-gradient(135deg,#111318,#0B0D10)] p-6">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-300">
               {mode === "create" ? "New Brand Page" : "Edit Brand Page"}
             </p>
 
-            <h2 className="mt-2 text-2xl font-black text-white">
+            <h2 className="mt-2 text-2xl font-black tracking-tight text-white">
               {mode === "create" ? "Add brand page" : "Update brand page"}
             </h2>
 
@@ -743,9 +681,9 @@ function PageFormModal(props: PageFormModalProps) {
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-[#171A20] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <X className="h-4.5 w-4.5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
@@ -833,7 +771,7 @@ function PageFormModal(props: PageFormModalProps) {
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-black text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-black text-slate-300 transition hover:bg-[#171A20] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Cancel
             </button>
@@ -841,7 +779,7 @@ function PageFormModal(props: PageFormModalProps) {
             <button
               type="submit"
               disabled={saving}
-              className="flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex items-center justify-center gap-2 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-5 py-3 text-sm font-black text-cyan-200 shadow-lg shadow-cyan-500/10 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {saving && <LoaderCircle className="h-4 w-4 animate-spin" />}
               {saving
@@ -857,10 +795,80 @@ function PageFormModal(props: PageFormModalProps) {
   );
 }
 
+function ConfirmModal({
+  confirm,
+  busy,
+  onClose,
+}: {
+  confirm: ConfirmState;
+  busy: boolean;
+  onClose: () => void;
+}) {
+  const toneStyle = {
+    amber:
+      "border-amber-500/20 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20",
+    emerald:
+      "border-emerald-500/20 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20",
+    red: "border-red-500/25 bg-red-500/15 text-red-200 hover:bg-red-500/25",
+  };
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#111318] p-6 shadow-2xl shadow-black/50">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+              Confirm Action
+            </p>
+
+            <h3 className="mt-2 text-2xl font-black leading-tight text-white">
+              {confirm.title}
+            </h3>
+          </div>
+
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-[#171A20] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <p className="mt-4 text-sm leading-7 text-slate-400">
+          {confirm.description}
+        </p>
+
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-black text-slate-300 transition hover:bg-[#171A20] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={() => void confirm.onConfirm()}
+            disabled={busy}
+            className={[
+              "flex items-center justify-center gap-2 rounded-lg border px-5 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60",
+              toneStyle[confirm.tone],
+            ].join(" ")}
+          >
+            {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
+            {busy ? "Working..." : confirm.actionLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function InfoBlock({ label, value }: { label: string; value: string }) {
   return (
     <section className="rounded-xl border border-white/10 bg-[#0B0D10] p-5">
-      <p className="text-xs font-black uppercase tracking-wide text-white">
+      <p className="text-xs font-black uppercase tracking-wide text-slate-400">
         {label}
       </p>
 
@@ -970,11 +978,11 @@ function NoticeCard({
 
 function LoadingPages() {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {Array.from({ length: 4 }).map((_, index) => (
         <div
           key={index}
-          className="h-[108px] animate-pulse rounded-xl border border-white/10 bg-[#0B0D10]"
+          className="h-[104px] animate-pulse rounded-lg border border-white/10 bg-[#0B0D10]"
         />
       ))}
     </div>
@@ -985,7 +993,7 @@ function EmptyPages() {
   return (
     <div className="flex min-h-[260px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-[#0B0D10] p-8 text-center">
       <div>
-        <Layers className="mx-auto h-10 w-10 text-slate-600" />
+        <Layers className="mx-auto h-10 w-10 text-slate-700" />
         <p className="mt-3 font-semibold text-white">No brand pages found</p>
         <p className="mt-1 text-sm text-slate-500">
           Add a page so it can appear in To Do List.

@@ -30,7 +30,6 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../components/common/PageHeader";
 import { useAuth } from "../context/AuthContext";
-import { tasks } from "../data/mockData";
 import { supabase } from "../lib/supabase";
 import {
   createEmployee,
@@ -89,6 +88,8 @@ const openTaskStatuses: TaskStatus[] = [
   "approved",
   "ready_to_upload",
 ];
+
+const tasks: Task[] = [];
 
 export function EmployeesPage({ onOpenSidebar }: EmployeesPageProps) {
   const { currentUser } = useAuth();
@@ -311,15 +312,15 @@ export function EmployeesPage({ onOpenSidebar }: EmployeesPageProps) {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Team"
-        description="Add members, edit account details, manage access, and remove disabled users."
+        description="Manage members, account details, access status, and disabled user removal."
         onOpenSidebar={onOpenSidebar}
-        accent="orange"
+        accent="blue"
         pills={[
           {
             icon: Users,
             value: employeeList.length,
-            label: "Total members",
-            accent: "orange",
+            label: "Members",
+            accent: "blue",
           },
           {
             icon: UserCheck,
@@ -356,15 +357,16 @@ export function EmployeesPage({ onOpenSidebar }: EmployeesPageProps) {
         </div>
       )}
 
-      <section className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-[#111318] p-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
+      <section className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-[#111318] p-3.5">
+          <div className="mb-3 flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-sm font-black uppercase tracking-wide text-slate-300">
+              <h2 className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
                 Members
               </h2>
-              <p className="mt-1 text-xs text-slate-500">
-                Admin and team member accounts.
+
+              <p className="mt-1 text-xs font-medium text-slate-600">
+                Admin and team accounts.
               </p>
             </div>
 
@@ -372,7 +374,7 @@ export function EmployeesPage({ onOpenSidebar }: EmployeesPageProps) {
               <button
                 onClick={() => void loadEmployees()}
                 disabled={loadingEmployees}
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                 title="Refresh"
               >
                 <RefreshCw
@@ -388,7 +390,7 @@ export function EmployeesPage({ onOpenSidebar }: EmployeesPageProps) {
                   setCreateModalOpen(true);
                   setNotice(null);
                 }}
-                className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500 text-white transition hover:bg-blue-400"
+                className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500 text-white shadow-lg shadow-blue-500/15 transition hover:bg-blue-400"
                 title="Add member"
               >
                 <Plus className="h-4 w-4" />
@@ -396,14 +398,14 @@ export function EmployeesPage({ onOpenSidebar }: EmployeesPageProps) {
             </div>
           </div>
 
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-white/10 bg-[#0B0D10] px-3 py-2.5">
-            <Search className="h-4 w-4 shrink-0 text-slate-500" />
+          <div className="mb-3 flex items-center gap-2 rounded-lg border border-white/10 bg-[#0B0D10] px-3 py-2.5">
+            <Search className="h-4 w-4 shrink-0 text-slate-600" />
 
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search team..."
-              className="w-full min-w-0 bg-transparent text-sm text-slate-300 outline-none placeholder:text-slate-600"
+              className="w-full min-w-0 bg-transparent text-sm font-medium text-slate-300 outline-none placeholder:text-slate-700"
             />
           </div>
 
@@ -413,7 +415,7 @@ export function EmployeesPage({ onOpenSidebar }: EmployeesPageProps) {
             ) : filteredEmployees.length === 0 ? (
               <EmptyMembers />
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {filteredEmployees.map((member) => (
                   <MemberListCard
                     key={member.id}
@@ -440,7 +442,7 @@ export function EmployeesPage({ onOpenSidebar }: EmployeesPageProps) {
           ) : (
             <div className="flex flex-1 items-center justify-center p-10 text-center">
               <div>
-                <Users className="mx-auto h-10 w-10 text-slate-600" />
+                <Users className="mx-auto h-10 w-10 text-slate-700" />
                 <p className="mt-3 font-semibold text-white">
                   Select a member
                 </p>
@@ -489,39 +491,47 @@ function MemberListCard({
     <button
       onClick={onClick}
       className={[
-        "group relative flex min-h-[96px] w-full items-center overflow-hidden rounded-xl border p-4 text-left transition",
+        "group relative w-full rounded-lg border p-3 text-left transition",
         selected
-          ? "border-orange-500/45 bg-orange-500/[0.07] ring-1 ring-orange-500/30"
+          ? "border-blue-500/45 bg-blue-500/[0.08] ring-1 ring-blue-500/25"
           : "border-white/10 bg-[#0B0D10] hover:border-white/20 hover:bg-[#14171D]",
-        isDisabled ? "opacity-70" : "",
+        isDisabled ? "opacity-65" : "",
       ].join(" ")}
     >
-      <span
-        className={[
-          "absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b",
-          isDisabled
-            ? "from-red-400 via-red-500 to-red-600"
-            : isAdmin
-              ? "from-orange-400 via-orange-500 to-amber-600"
-              : "from-blue-400 via-blue-500 to-violet-600",
-        ].join(" ")}
-      />
-
-      <div className="absolute right-4 top-4">
-        <AccessStatusBadge status={member.accessStatus} />
-      </div>
-
-      <div className="flex min-w-0 items-center gap-4 pr-24">
+      <div className="flex min-w-0 items-start gap-3">
         <MemberAvatar role={member.role} size="sm" />
 
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-base font-black leading-tight text-white">
-            {member.name}
-          </h3>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="truncate text-sm font-black leading-tight text-white">
+                {member.name}
+              </h3>
 
-          <p className="mt-1 truncate text-sm font-medium text-slate-500">
-            {displayRole(member.role)}
-          </p>
+              <p className="mt-1 truncate text-xs font-medium text-slate-500">
+                {displayRole(member.role)}
+              </p>
+            </div>
+
+            <AccessStatusBadge status={member.accessStatus} compact />
+          </div>
+
+          <div className="mt-3 flex items-center gap-2">
+            <span
+              className={[
+                "h-1.5 w-1.5 rounded-full",
+                isDisabled
+                  ? "bg-red-400"
+                  : isAdmin
+                    ? "bg-violet-400"
+                    : "bg-blue-400",
+              ].join(" ")}
+            />
+
+            <p className="truncate text-[11px] font-semibold text-slate-600">
+              {member.email}
+            </p>
+          </div>
         </div>
       </div>
     </button>
@@ -558,7 +568,7 @@ function MemberDetail({
 
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="break-words text-2xl font-black leading-tight text-white">
+                <h2 className="break-words text-2xl font-black leading-tight tracking-tight text-white">
                   {member.name}
                 </h2>
 
@@ -566,14 +576,14 @@ function MemberDetail({
                 <AccessStatusBadge status={member.accessStatus} />
               </div>
 
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-400">
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
                 <div className="flex min-w-0 items-center gap-2">
-                  <Mail className="h-4 w-4 shrink-0 text-slate-500" />
+                  <Mail className="h-4 w-4 shrink-0 text-slate-600" />
                   <span className="truncate">{member.email}</span>
                 </div>
 
                 <div className="flex min-w-0 items-center gap-2">
-                  <Clock className="h-4 w-4 shrink-0 text-slate-500" />
+                  <Clock className="h-4 w-4 shrink-0 text-slate-600" />
                   <span className="truncate">Created {member.createdAt}</span>
                 </div>
               </div>
@@ -670,32 +680,33 @@ function MemberDetail({
           />
         </div>
 
-        <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_330px]">
+        <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
           <section className="min-w-0 rounded-xl border border-white/10 bg-[#0B0D10] p-5">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-base font-black text-white">
                   Assigned Work
                 </h3>
+
                 <p className="mt-1 max-w-md text-sm leading-relaxed text-slate-500">
                   Current and recent production items assigned to this member.
                 </p>
               </div>
 
-              <span className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 py-1 text-xs font-black text-slate-300">
+              <span className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-black text-slate-300">
                 {assignedTasks.length} items
               </span>
             </div>
 
             {assignedTasks.length === 0 ? (
-              <div className="flex min-h-[260px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-[#111318] p-8 text-center">
+              <div className="flex min-h-[240px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-[#111318] p-8 text-center">
                 <div>
-                  <CircleDot className="mx-auto h-9 w-9 text-slate-600" />
+                  <CircleDot className="mx-auto h-9 w-9 text-slate-700" />
                   <p className="mt-3 font-semibold text-white">
                     No assigned work yet
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
-                    Task assignment will connect after the To Do database.
+                    This summary will connect to real task data later.
                   </p>
                 </div>
               </div>
@@ -710,6 +721,7 @@ function MemberDetail({
 
           <aside className="rounded-xl border border-white/10 bg-[#0B0D10] p-5">
             <h3 className="text-base font-black text-white">Access Control</h3>
+
             <p className="mt-1 text-sm leading-relaxed text-slate-500">
               Real access is controlled by Supabase Auth and profiles.
             </p>
@@ -719,7 +731,7 @@ function MemberDetail({
                 icon={Shield}
                 label="Role"
                 value={displayRole(member.role)}
-                tone={member.role === "Admin" ? "orange" : "blue"}
+                tone={member.role === "Admin" ? "violet" : "blue"}
               />
 
               <AccessItem
@@ -737,10 +749,9 @@ function MemberDetail({
               />
             </div>
 
-            <div className="mt-5 rounded-lg border border-orange-500/15 bg-orange-500/[0.05] p-4">
-              <p className="text-sm font-black text-orange-200">
-                Remove Rule
-              </p>
+            <div className="mt-5 rounded-lg border border-blue-500/15 bg-blue-500/[0.055] p-4">
+              <p className="text-sm font-black text-blue-200">Remove Rule</p>
+
               <p className="mt-2 text-sm leading-relaxed text-slate-400">
                 Disable first, then remove. This avoids accidental permanent
                 deletion.
@@ -820,7 +831,7 @@ function MemberFormModal(props: EmployeeFormModalProps) {
             disabled={saving}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <X className="h-4.5 w-4.5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
@@ -875,9 +886,9 @@ function MemberFormModal(props: EmployeeFormModalProps) {
                   className="shrink-0 text-slate-500 transition hover:text-white"
                 >
                   {showPassword ? (
-                    <EyeOff className="h-4.5 w-4.5" />
+                    <EyeOff className="h-4 w-4" />
                   ) : (
-                    <Eye className="h-4.5 w-4.5" />
+                    <Eye className="h-4 w-4" />
                   )}
                 </button>
               </div>
@@ -931,16 +942,14 @@ function MemberAvatar({
   return (
     <div
       className={[
-        "shrink-0 border text-white shadow-lg",
+        "flex shrink-0 items-center justify-center rounded-lg border text-white shadow-lg",
         role === "Admin"
-          ? "border-orange-400/25 bg-orange-500 shadow-orange-500/20"
-          : "border-blue-400/25 bg-blue-500 shadow-blue-500/20",
-        size === "lg"
-          ? "flex h-14 w-14 items-center justify-center rounded-xl"
-          : "flex h-12 w-12 items-center justify-center rounded-xl",
+          ? "border-violet-400/25 bg-violet-500 shadow-violet-500/15"
+          : "border-blue-400/25 bg-blue-500 shadow-blue-500/15",
+        size === "lg" ? "h-14 w-14" : "h-10 w-10",
       ].join(" ")}
     >
-      <Icon className={size === "lg" ? "h-6 w-6" : "h-5 w-5"} />
+      <Icon className={size === "lg" ? "h-6 w-6" : "h-4 w-4"} />
     </div>
   );
 }
@@ -999,7 +1008,7 @@ function SummaryCard({
             styles[accent],
           ].join(" ")}
         >
-          <Icon className="h-4.5 w-4.5" />
+          <Icon className="h-4 w-4" />
         </div>
 
         <p className="text-2xl font-black text-white">{value}</p>
@@ -1046,10 +1055,10 @@ function AccessItem({
   icon: LucideIcon;
   label: string;
   value: string;
-  tone: "orange" | "blue" | "emerald" | "slate" | "red";
+  tone: "violet" | "blue" | "emerald" | "slate" | "red";
 }) {
   const styles = {
-    orange: "text-orange-300 bg-orange-500/10 border-orange-500/20",
+    violet: "text-violet-300 bg-violet-500/10 border-violet-500/20",
     blue: "text-blue-300 bg-blue-500/10 border-blue-500/20",
     emerald: "text-emerald-300 bg-emerald-500/10 border-emerald-500/20",
     slate: "text-slate-300 bg-white/5 border-white/10",
@@ -1078,7 +1087,7 @@ function AccessItem({
 function RoleBadge({ role }: { role: EmployeeView["role"] }) {
   const style =
     role === "Admin"
-      ? "border-orange-500/20 bg-orange-500/10 text-orange-300"
+      ? "border-violet-500/20 bg-violet-500/10 text-violet-300"
       : "border-blue-500/20 bg-blue-500/10 text-blue-300";
 
   return (
@@ -1093,7 +1102,13 @@ function RoleBadge({ role }: { role: EmployeeView["role"] }) {
   );
 }
 
-function AccessStatusBadge({ status }: { status: ProfileStatus }) {
+function AccessStatusBadge({
+  status,
+  compact = false,
+}: {
+  status: ProfileStatus;
+  compact?: boolean;
+}) {
   const style =
     status === "active"
       ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
@@ -1102,7 +1117,8 @@ function AccessStatusBadge({ status }: { status: ProfileStatus }) {
   return (
     <span
       className={[
-        "rounded-lg border px-2.5 py-1 text-xs font-black",
+        "shrink-0 rounded-lg border font-black",
+        compact ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-xs",
         style,
       ].join(" ")}
     >
@@ -1126,9 +1142,9 @@ function TaskStatusBadge({ status }: { status: TaskStatus }) {
 
 function EmptyMembers() {
   return (
-    <div className="flex min-h-[260px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-[#0B0D10] p-8 text-center">
+    <div className="flex min-h-[240px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-[#0B0D10] p-8 text-center">
       <div>
-        <Users className="mx-auto h-10 w-10 text-slate-600" />
+        <Users className="mx-auto h-10 w-10 text-slate-700" />
         <p className="mt-3 font-semibold text-white">No members found</p>
         <p className="mt-1 text-sm text-slate-500">
           Try another search or add a new member.
@@ -1140,11 +1156,11 @@ function EmptyMembers() {
 
 function LoadingEmployees() {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {Array.from({ length: 4 }).map((_, index) => (
         <div
           key={index}
-          className="h-[96px] animate-pulse rounded-xl border border-white/10 bg-[#0B0D10]"
+          className="h-[84px] animate-pulse rounded-lg border border-white/10 bg-[#0B0D10]"
         />
       ))}
     </div>

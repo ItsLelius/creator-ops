@@ -28,9 +28,11 @@ import {
   getAssignablePeople,
   getTodoItems,
   updateTodoItem,
-  type CreateTodoInput,
-  type TeamMemberOption,
-  type UpdateTodoInput,
+} from "../services/todoService";
+import type {
+  CreateTodoInput,
+  TeamMemberOption,
+  UpdateTodoInput,
 } from "../services/todoService";
 import type {
   ContentPageDbItem,
@@ -242,19 +244,19 @@ export function ToDoListPage({
             : "View active assigned work. Submitted work moves to review."
         }
         onOpenSidebar={onOpenSidebar}
-        accent="blue"
+        accent="violet"
         pills={[
           {
             icon: ListTodo,
             value: items.length,
             label: "Active work",
-            accent: "blue",
+            accent: "violet",
           },
           {
             icon: FileText,
             value: assignedCount,
             label: "Assigned",
-            accent: "violet",
+            accent: "blue",
           },
           {
             icon: UserRound,
@@ -266,7 +268,7 @@ export function ToDoListPage({
             icon: AlertTriangle,
             value: revisionCount,
             label: "Revision",
-            accent: "amber",
+            accent: "red",
           },
         ]}
       />
@@ -285,26 +287,31 @@ export function ToDoListPage({
         </div>
       )}
 
-      <section className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-[#111318] p-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-black uppercase tracking-wide text-slate-300">
+      <section className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-[#111318] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.18)]">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-300/80">
                 Work Queue
+              </p>
+
+              <h2 className="mt-2 text-lg font-black tracking-tight text-white">
+                Active Work
               </h2>
 
-              <p className="mt-1 text-xs text-slate-500">
-                {isAdmin ? "Active production work." : "Needs your action."}
+              <p className="mt-1 text-xs font-medium leading-5 text-slate-600">
+                {isAdmin ? "Production work in progress." : "Needs your action."}
               </p>
             </div>
 
             {isAdmin && (
               <button
+                type="button"
                 onClick={() => {
                   setCreateModalOpen(true);
                   setNotice(null);
                 }}
-                className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500 text-white transition hover:bg-blue-400"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-violet-500/20 bg-violet-500/10 text-violet-200 transition hover:bg-violet-500/20"
                 title="Create work item"
               >
                 <Plus className="h-4 w-4" />
@@ -312,14 +319,14 @@ export function ToDoListPage({
             )}
           </div>
 
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-white/10 bg-[#0B0D10] px-3 py-2.5">
-            <Search className="h-4 w-4 shrink-0 text-slate-500" />
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-white/10 bg-[#0B0D10] px-3 py-2.5 transition focus-within:border-violet-500/60">
+            <Search className="h-4 w-4 shrink-0 text-slate-600" />
 
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search active work..."
-              className="w-full min-w-0 bg-transparent text-sm font-semibold text-slate-300 outline-none placeholder:text-slate-600"
+              className="w-full min-w-0 bg-transparent text-sm font-medium text-slate-300 outline-none placeholder:text-slate-700"
             />
           </div>
 
@@ -329,7 +336,7 @@ export function ToDoListPage({
             ) : filteredItems.length === 0 ? (
               <EmptyToDoList isAdmin={isAdmin} />
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {filteredItems.map((item) => (
                   <ToDoCard
                     key={item.id}
@@ -343,7 +350,7 @@ export function ToDoListPage({
           </div>
         </aside>
 
-        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#111318]">
+        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#111318] shadow-[0_16px_40px_rgba(0,0,0,0.18)]">
           {selectedItem ? (
             <ToDoViewer
               item={selectedItem}
@@ -355,10 +362,12 @@ export function ToDoListPage({
           ) : (
             <div className="flex flex-1 items-center justify-center p-10 text-center">
               <div>
-                <ListTodo className="mx-auto h-10 w-10 text-slate-600" />
+                <ListTodo className="mx-auto h-10 w-10 text-slate-700" />
+
                 <p className="mt-3 font-semibold text-white">
                   Select a work item
                 </p>
+
                 <p className="mt-1 text-sm text-slate-500">
                   Caption, Prompt A, and Prompt B will appear here.
                 </p>
@@ -411,15 +420,21 @@ function ToDoCard({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={[
-        "group relative w-full overflow-hidden rounded-xl border p-4 text-left transition",
+        "group relative w-full overflow-hidden rounded-lg border p-4 text-left transition duration-200",
         selected
-          ? "border-blue-500/45 bg-blue-500/[0.065] ring-1 ring-blue-500/30"
-          : "border-white/10 bg-[#0B0D10] hover:border-white/20 hover:bg-[#14171D]",
+          ? "border-white/15 bg-[#1A1D24] shadow-[0_12px_28px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.045)]"
+          : "border-white/10 bg-[#0B0D10] hover:border-white/15 hover:bg-[#171A20] hover:shadow-[0_8px_22px_rgba(0,0,0,0.18)]",
       ].join(" ")}
     >
-      <span className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-cyan-400 via-blue-500 to-violet-600" />
+      <span
+        className={[
+          "absolute bottom-0 left-0 top-0 w-1",
+          selected ? "bg-violet-300" : "bg-white/10 group-hover:bg-violet-400/60",
+        ].join(" ")}
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge status={item.status} />
@@ -462,7 +477,7 @@ function ToDoViewer({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b border-white/10 bg-[#111318] p-5">
+      <div className="shrink-0 border-b border-white/10 bg-[radial-gradient(circle_at_0%_0%,rgba(124,58,237,0.14),transparent_34%),linear-gradient(135deg,#111318,#0B0D10)] p-5">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -484,7 +499,7 @@ function ToDoViewer({
               )}
             </div>
 
-            <h2 className="mt-3 break-words text-3xl font-black leading-tight text-white">
+            <h2 className="mt-4 break-words text-3xl font-black leading-tight tracking-tight text-white">
               {item.title}
             </h2>
 
@@ -501,14 +516,16 @@ function ToDoViewer({
           {isAdmin && (
             <div className="flex shrink-0 flex-wrap gap-2">
               <button
+                type="button"
                 onClick={() => onEdit(item)}
-                className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-bold text-slate-300 transition hover:bg-white/[0.06] hover:text-white"
+                className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-bold text-slate-300 transition hover:bg-[#171A20] hover:text-white"
               >
                 <Edit3 className="h-4 w-4" />
                 Edit
               </button>
 
               <button
+                type="button"
                 onClick={() => onDelete(item)}
                 disabled={isBusy}
                 className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm font-bold text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
@@ -526,7 +543,7 @@ function ToDoViewer({
       </div>
 
       <div className="scroll-panel min-h-0 flex-1 overflow-y-auto p-5">
-        <div className="mx-auto max-w-5xl space-y-5">
+        <div className="mx-auto max-w-5xl space-y-4">
           <CopyBlock label="Caption" value={item.caption} tone="blue" />
           <CopyBlock label="Prompt A" value={item.prompt_a} tone="violet" />
           <CopyBlock label="Prompt B" value={item.prompt_b} tone="emerald" />
@@ -651,13 +668,13 @@ function TodoFormModal(props: TodoFormModalProps) {
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
       <div className="max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-xl border border-white/10 bg-[#111318] shadow-2xl shadow-black/50">
-        <div className="flex items-start justify-between gap-4 border-b border-white/10 p-6">
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 bg-[radial-gradient(circle_at_0%_0%,rgba(124,58,237,0.14),transparent_38%),linear-gradient(135deg,#111318,#0B0D10)] p-6">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-300">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-violet-300">
               {mode === "create" ? "New Work Item" : "Edit Work Item"}
             </p>
 
-            <h2 className="mt-2 text-2xl font-black text-white">
+            <h2 className="mt-2 text-2xl font-black tracking-tight text-white">
               {mode === "create" ? "Create active work" : "Update active work"}
             </h2>
 
@@ -671,9 +688,9 @@ function TodoFormModal(props: TodoFormModalProps) {
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-[#171A20] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <X className="h-4.5 w-4.5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
@@ -748,7 +765,7 @@ function TodoFormModal(props: TodoFormModalProps) {
                     }))
                   }
                   type="date"
-                  className="w-full rounded-lg border border-white/10 bg-[#111318] px-4 py-3.5 text-sm font-semibold text-white outline-none transition focus:border-blue-500/70"
+                  className="w-full rounded-lg border border-white/10 bg-[#111318] px-4 py-3.5 text-sm font-semibold text-white outline-none transition focus:border-violet-500/70"
                 />
               </label>
 
@@ -833,7 +850,7 @@ function TodoFormModal(props: TodoFormModalProps) {
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-black text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-black text-slate-300 transition hover:bg-[#171A20] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Cancel
             </button>
@@ -841,7 +858,7 @@ function TodoFormModal(props: TodoFormModalProps) {
             <button
               type="submit"
               disabled={saving}
-              className="flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex items-center justify-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/10 px-5 py-3 text-sm font-black text-violet-200 shadow-lg shadow-violet-500/10 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {saving && <LoaderCircle className="h-4 w-4 animate-spin" />}
               {saving
@@ -881,11 +898,12 @@ function ConfirmModal({
           </div>
 
           <button
+            type="button"
             onClick={onClose}
             disabled={busy}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-[#171A20] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <X className="h-4.5 w-4.5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
@@ -895,14 +913,16 @@ function ConfirmModal({
 
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
+            type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-black text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-black text-slate-300 transition hover:bg-[#171A20] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             Cancel
           </button>
 
           <button
+            type="button"
             onClick={() => void confirm.onConfirm()}
             disabled={busy}
             className="flex items-center justify-center gap-2 rounded-lg border border-red-500/25 bg-red-500/15 px-5 py-3 text-sm font-black text-red-200 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
@@ -940,6 +960,7 @@ function CopyBlock({
         </p>
 
         <button
+          type="button"
           onClick={() => void navigator.clipboard.writeText(value)}
           disabled={!canCopy}
           className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-40"
@@ -979,7 +1000,7 @@ function TextField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-white/10 bg-[#111318] px-4 py-3.5 text-sm font-semibold text-white outline-none transition placeholder:text-slate-600 focus:border-blue-500/70"
+        className="w-full rounded-lg border border-white/10 bg-[#111318] px-4 py-3.5 text-sm font-semibold text-white outline-none transition placeholder:text-slate-600 focus:border-violet-500/70"
       />
     </label>
   );
@@ -1007,7 +1028,7 @@ function SelectField({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-lg border border-white/10 bg-[#111318] px-4 py-3.5 text-sm font-semibold text-white outline-none transition focus:border-blue-500/70"
+        className="w-full rounded-lg border border-white/10 bg-[#111318] px-4 py-3.5 text-sm font-semibold text-white outline-none transition focus:border-violet-500/70"
       >
         {children}
       </select>
@@ -1039,7 +1060,7 @@ function TextArea({
         rows={rows}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full resize-y rounded-lg border border-white/10 bg-[#111318] px-4 py-3.5 text-sm font-semibold leading-7 text-white outline-none transition placeholder:text-slate-600 focus:border-blue-500/70"
+        className="w-full resize-y rounded-lg border border-white/10 bg-[#111318] px-4 py-3.5 text-sm font-semibold leading-7 text-white outline-none transition placeholder:text-slate-600 focus:border-violet-500/70"
       />
     </label>
   );
@@ -1084,8 +1105,10 @@ function EmptyToDoList({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="flex min-h-[260px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-[#0B0D10] p-8 text-center">
       <div>
-        <ListTodo className="mx-auto h-10 w-10 text-slate-600" />
+        <ListTodo className="mx-auto h-10 w-10 text-slate-700" />
+
         <p className="mt-3 font-semibold text-white">No active work found</p>
+
         <p className="mt-1 text-sm text-slate-500">
           {isAdmin
             ? "Create a new assigned work item to start."
@@ -1098,11 +1121,11 @@ function EmptyToDoList({ isAdmin }: { isAdmin: boolean }) {
 
 function LoadingTodoItems() {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {Array.from({ length: 4 }).map((_, index) => (
         <div
           key={index}
-          className="h-[112px] animate-pulse rounded-xl border border-white/10 bg-[#0B0D10]"
+          className="h-[112px] animate-pulse rounded-lg border border-white/10 bg-[#0B0D10]"
         />
       ))}
     </div>
@@ -1142,7 +1165,9 @@ function statusLabel(status: TodoDbStatus) {
     case "approved":
       return "Approved";
     case "done":
-      return "Done";
+      return "Ready";
+    case "posted":
+      return "Posted";
     default:
       return status;
   }
@@ -1162,6 +1187,8 @@ function statusStyle(status: TodoDbStatus) {
       return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
     case "done":
       return "border-green-500/20 bg-green-500/10 text-green-300";
+    case "posted":
+      return "border-blue-500/20 bg-blue-500/10 text-blue-300";
     default:
       return "border-white/10 bg-white/5 text-slate-300";
   }

@@ -14,12 +14,13 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../components/common/PageHeader";
 import { SmoothSelect } from "../components/common/SmoothSelect";
-import { calendarPosts } from "../data/mockData";
 import type { CalendarPost, CalendarPostStatus } from "../types";
 
 type CalendarPageProps = {
   onOpenSidebar: () => void;
 };
+
+const calendarPosts: CalendarPost[] = [];
 
 export function CalendarPage({ onOpenSidebar }: CalendarPageProps) {
   const [search, setSearch] = useState("");
@@ -125,14 +126,14 @@ export function CalendarPage({ onOpenSidebar }: CalendarPageProps) {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Calendar"
-        description="Compact posting calendar with small pills so each date stays clean and balanced."
+        description="Review scheduled, ready, posted, and missed content in one production calendar."
         onOpenSidebar={onOpenSidebar}
         accent="blue"
         pills={[
           {
             icon: CalendarDays,
             value: filteredPosts.length,
-            label: "Visible posts",
+            label: "Visible",
             accent: "blue",
           },
           {
@@ -156,11 +157,11 @@ export function CalendarPage({ onOpenSidebar }: CalendarPageProps) {
         ]}
       />
 
-      <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-white/10 bg-[#111318] p-5">
-        <div className="mb-5 rounded-xl border border-white/10 bg-[#171A21] p-3">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.4fr_1fr_1fr_1fr]">
-            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#0B0D10] px-3 py-2.5">
-              <Search className="h-4 w-4 shrink-0 text-slate-500" />
+      <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-white/10 bg-[#111318] p-4">
+        <div className="mb-4 rounded-xl border border-white/10 bg-[#0B0D10] p-3">
+          <div className="grid gap-3 xl:grid-cols-[1.4fr_1fr_1fr_1fr]">
+            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#111318] px-3 py-2.5 transition focus-within:border-blue-500/60">
+              <Search className="h-4 w-4 shrink-0 text-slate-600" />
 
               <input
                 value={search}
@@ -168,8 +169,8 @@ export function CalendarPage({ onOpenSidebar }: CalendarPageProps) {
                   setSearch(event.target.value);
                   clearSelection();
                 }}
-                placeholder="Search scheduled content..."
-                className="w-full min-w-0 bg-transparent text-sm font-semibold text-slate-300 outline-none placeholder:text-slate-600"
+                placeholder="Search calendar..."
+                className="w-full min-w-0 bg-transparent text-sm font-medium text-slate-300 outline-none placeholder:text-slate-700"
               />
             </div>
 
@@ -217,8 +218,8 @@ export function CalendarPage({ onOpenSidebar }: CalendarPageProps) {
           </div>
         </div>
 
-        <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="calendar-shell min-h-0 overflow-hidden rounded-xl border border-white/10 bg-[#0B0D10] p-4">
+        <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="calendar-shell min-h-0 overflow-hidden rounded-xl border border-white/10 bg-[#0B0D10] p-3">
             <FullCalendar
               plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
               initialDate={
@@ -354,7 +355,7 @@ function DaySchedulePanel({
         {posts.length === 0 ? (
           <div className="flex min-h-[240px] items-center justify-center text-center">
             <div>
-              <CalendarDays className="mx-auto h-8 w-8 text-slate-600" />
+              <CalendarDays className="mx-auto h-8 w-8 text-slate-700" />
               <p className="mt-3 font-semibold text-white">
                 No posts scheduled
               </p>
@@ -380,7 +381,7 @@ function DaySchedulePanel({
                     <button
                       key={post.id}
                       onClick={() => onSelectPost(post)}
-                      className="w-full rounded-xl border border-white/10 bg-[#111318] p-3 text-left transition hover:border-white/20 hover:bg-[#171A21]"
+                      className="w-full rounded-lg border border-white/10 bg-[#111318] p-3 text-left transition hover:border-white/20 hover:bg-[#171A21]"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -496,7 +497,7 @@ function EmptyCalendarPanel() {
   return (
     <div className="flex flex-1 items-center justify-center p-6 text-center">
       <div>
-        <CalendarDays className="mx-auto h-8 w-8 text-slate-600" />
+        <CalendarDays className="mx-auto h-8 w-8 text-slate-700" />
         <p className="mt-3 font-semibold text-white">Select a post or day</p>
         <p className="mt-1 text-sm text-slate-500">
           Click a calendar item for details, or click a day to see its full

@@ -1,142 +1,170 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, CheckSquare, FolderOpen, Plus, Search } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckSquare,
+  CircleDot,
+  FolderOpen,
+  Search,
+} from "lucide-react";
 import { FolderCard } from "../components/cards/FolderCard";
 import { ProductionCard } from "../components/cards/ProductionCard";
 import { PageHeader } from "../components/common/PageHeader";
 import { SmoothSelect } from "../components/common/SmoothSelect";
-import { tasks } from "../data/mockData";
-import type { TaskStatus } from "../types";
+import type { Task, TaskStatus } from "../types";
 
 type TasksPageProps = {
   onOpenSidebar: () => void;
 };
+
+const tasks: Task[] = [];
 
 export function TasksPage({ onOpenSidebar }: TasksPageProps) {
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | TaskStatus>("all");
 
-  const activeTasks = tasks.filter((task) => task.status !== "posted");
+  const activeTasks = useMemo(() => {
+    return tasks.filter((task) => task.status !== "posted");
+  }, []);
 
   const folders = useMemo(() => {
     const brands = Array.from(new Set(activeTasks.map((task) => task.brand)));
 
-    return brands.map((brand) => ({
-      brand,
-      count: activeTasks.filter((task) => task.brand === brand).length,
-    }));
+    return brands
+      .map((brand) => ({
+        brand,
+        count: activeTasks.filter((task) => task.brand === brand).length,
+      }))
+      .sort((a, b) => a.brand.localeCompare(b.brand));
   }, [activeTasks]);
 
-  const selectedBrandTasks = activeTasks.filter((task) => {
-    const matchesBrand = selectedBrand ? task.brand === selectedBrand : false;
-    const matchesSearch = task.title
-      .toLowerCase()
-      .includes(search.toLowerCase());
+  const selectedBrandTasks = useMemo(() => {
+    const query = search.trim().toLowerCase();
 
-    const matchesStatus =
-      statusFilter === "all" || task.status === statusFilter;
+    return activeTasks.filter((task) => {
+      const matchesBrand = selectedBrand ? task.brand === selectedBrand : false;
 
-    return matchesBrand && matchesSearch && matchesStatus;
-  });
+      const matchesSearch =
+        !query ||
+        task.title.toLowerCase().includes(query) ||
+        task.brand.toLowerCase().includes(query) ||
+        task.assignee.toLowerCase().includes(query);
+
+      const matchesStatus =
+        statusFilter === "all" || task.status === statusFilter;
+
+      return matchesBrand && matchesSearch && matchesStatus;
+    });
+  }, [activeTasks, selectedBrand, search, statusFilter]);
+
+  function resetFolderView() {
+    setSelectedBrand(null);
+    setSearch("");
+    setStatusFilter("all");
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Tasks"
-        description="Create, assign, review, and track active production work."
+        description="Browse active production work by page folder, status, and search."
         onOpenSidebar={onOpenSidebar}
+        accent="blue"
         pills={[
           {
             icon: CheckSquare,
             value: activeTasks.length,
-            label: "Active tasks",
+            label: "Active",
             accent: "blue",
           },
           {
             icon: FolderOpen,
             value: folders.length,
-            label: "Page folders",
+            label: "Folders",
             accent: "violet",
           },
         ]}
       />
 
-      {!selectedBrand && (
-        <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/10 bg-[#111318] p-5">
-          <div className="mb-5 flex items-center justify-between">
+      {!selectedBrand ? (
+        <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-white/10 bg-[#111318] p-4">
+          <div className="mb-4 flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-bold text-white">Task Folders</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Open a page to view its production tasks.
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                Task Folders
+              </p>
+
+              <h2 className="mt-2 text-xl font-black tracking-tight text-white">
+                Page folders
+              </h2>
+
+              <p className="mt-1 text-sm leading-6 text-slate-500">
+                Open a page folder to view its active production tasks.
               </p>
             </div>
-
-            <button className="hidden items-center gap-2 rounded-xl bg-blue-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-400 sm:flex">
-              <Plus className="h-4 w-4" />
-              New Task
-            </button>
           </div>
 
           <div className="scroll-panel min-h-0 flex-1 overflow-y-auto pr-1">
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
-              {folders.map((folder) => (
-                <FolderCard
-                  key={folder.brand}
-                  title={folder.brand}
-                  count={folder.count}
-                  label="active tasks"
-                  onClick={() => {
-                    setSelectedBrand(folder.brand);
-                    setSearch("");
-                    setStatusFilter("all");
-                  }}
-                />
-              ))}
-            </div>
+            {folders.length === 0 ? (
+              <EmptyState
+                title="No task folders yet"
+                description="Task folders will appear here once production tasks are available."
+              />
+            ) : (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
+                {folders.map((folder) => (
+                  <FolderCard
+                    key={folder.brand}
+                    title={folder.brand}
+                    count={folder.count}
+                    label="active tasks"
+                    onClick={() => {
+                      setSelectedBrand(folder.brand);
+                      setSearch("");
+                      setStatusFilter("all");
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </section>
-      )}
-
-      {selectedBrand && (
-        <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/10 bg-[#111318] p-5">
+      ) : (
+        <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-white/10 bg-[#111318] p-4">
           <div className="mb-4 flex shrink-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0">
               <button
-                onClick={() => {
-                  setSelectedBrand(null);
-                  setSearch("");
-                  setStatusFilter("all");
-                }}
-                className="mb-3 flex items-center gap-2 text-sm font-semibold text-blue-400 transition hover:text-blue-300"
+                onClick={resetFolderView}
+                className="mb-3 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-bold text-slate-300 transition hover:bg-white/[0.06] hover:text-white"
               >
                 <ArrowLeft className="h-4 w-4" />
-                Back to task folders
+                Back to folders
               </button>
 
-              <h2 className="truncate text-xl font-bold text-white">
-                {selectedBrand} Tasks
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                Selected Folder
+              </p>
+
+              <h2 className="mt-2 truncate text-2xl font-black tracking-tight text-white">
+                {selectedBrand}
               </h2>
-              <p className="mt-1 text-sm text-slate-400">
+
+              <p className="mt-1 text-sm leading-6 text-slate-500">
                 {selectedBrandTasks.length} active task
                 {selectedBrandTasks.length === 1 ? "" : "s"} shown
               </p>
             </div>
-
-            <button className="flex w-fit items-center gap-2 rounded-xl bg-blue-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-400">
-              <Plus className="h-4 w-4" />
-              New Task
-            </button>
           </div>
 
           <div className="mb-4 grid gap-3 md:grid-cols-[1fr_240px]">
-            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#0B0D10] px-3 py-2.5">
-              <Search className="h-4 w-4 text-slate-500" />
+            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#0B0D10] px-3 py-2.5 transition focus-within:border-blue-500/60">
+              <Search className="h-4 w-4 shrink-0 text-slate-600" />
 
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search tasks..."
-                className="w-full bg-transparent text-sm text-slate-300 outline-none placeholder:text-slate-600"
+                className="w-full min-w-0 bg-transparent text-sm font-medium text-slate-300 outline-none placeholder:text-slate-700"
               />
             </div>
 
@@ -156,31 +184,53 @@ export function TasksPage({ onOpenSidebar }: TasksPageProps) {
           </div>
 
           <div className="scroll-panel min-h-0 flex-1 overflow-y-auto pr-1">
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
-              {selectedBrandTasks.map((task) => (
-                <ProductionCard
-                  key={task.id}
-                  title={task.title}
-                  subtitle={task.brand}
-                  status={task.status}
-                  assignee={task.assignee}
-                  due={task.due}
-                  detail={task.detail}
-                />
-              ))}
-            </div>
-
-            {selectedBrandTasks.length === 0 && (
-              <div className="rounded-xl border border-dashed border-white/10 bg-[#0B0D10] p-10 text-center">
-                <p className="font-semibold text-white">No tasks found</p>
-                <p className="mt-1 text-sm text-slate-500">
-                  Try changing your search or filter.
-                </p>
+            {selectedBrandTasks.length === 0 ? (
+              <EmptyState
+                title="No tasks found"
+                description="Try changing your search or status filter."
+              />
+            ) : (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
+                {selectedBrandTasks.map((task) => (
+                  <ProductionCard
+                    key={task.id}
+                    title={task.title}
+                    subtitle={task.brand}
+                    status={task.status}
+                    assignee={task.assignee}
+                    due={task.due}
+                    detail={task.detail}
+                  />
+                ))}
               </div>
             )}
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+function EmptyState({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex min-h-[280px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-[#0B0D10] p-8 text-center">
+      <div>
+        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-slate-600">
+          <CircleDot className="h-5 w-5" />
+        </div>
+
+        <p className="mt-4 font-black text-white">{title}</p>
+
+        <p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">
+          {description}
+        </p>
+      </div>
     </div>
   );
 }

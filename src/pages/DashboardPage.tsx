@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   AlertTriangle,
   CalendarDays,
@@ -26,6 +31,8 @@ type NoticeState = {
   type: "success" | "error";
   message: string;
 };
+
+type StatAccent = "blue" | "violet" | "amber" | "red" | "emerald" | "slate";
 
 export function DashboardPage({ onOpenSidebar }: DashboardPageProps) {
   const [items, setItems] = useState<TodoDbItem[]>([]);
@@ -144,7 +151,17 @@ export function DashboardPage({ onOpenSidebar }: DashboardPageProps) {
         </div>
       )}
 
-      <section className="mb-5 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+      <section className="mb-5 grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+        <StudioSnapshot
+          stats={dashboardStats}
+          loading={loading}
+          onRefresh={loadDashboard}
+        />
+
+        <QuickHealthCard stats={dashboardStats} />
+      </section>
+
+      <section className="mb-5 grid grid-cols-2 gap-4 xl:grid-cols-6">
         <StatCard
           title="Active Work"
           value={dashboardStats.active}
@@ -231,7 +248,7 @@ export function DashboardPage({ onOpenSidebar }: DashboardPageProps) {
           description="Current work distribution."
           badge={`${dashboardStats.total} total`}
         >
-          <div className="space-y-3">
+          <div className="space-y-4">
             <StatusProgress
               label="Assigned"
               value={dashboardStats.assigned}
@@ -329,6 +346,173 @@ export function DashboardPage({ onOpenSidebar }: DashboardPageProps) {
   );
 }
 
+function StudioSnapshot({
+  stats,
+  loading,
+  onRefresh,
+}: {
+  stats: {
+    total: number;
+    active: number;
+    underReview: number;
+    readyToUpload: number;
+    dueToday: number;
+    teamMembers: number;
+  };
+  loading: boolean;
+  onRefresh: () => Promise<void>;
+}) {
+  return (
+    <section className="relative overflow-hidden rounded-xl border border-white/10 bg-[radial-gradient(circle_at_0%_0%,rgba(59,130,246,0.14),transparent_34%),linear-gradient(135deg,#111318,#0B0D10)] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.22)]">
+      <div className="pointer-events-none absolute -left-20 bottom-0 h-40 w-56 rounded-full bg-blue-500/20 blur-[80px]" />
+      <div className="pointer-events-none absolute right-10 top-0 h-32 w-44 rounded-full bg-violet-500/10 blur-[80px]" />
+
+      <div className="relative flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-300/80">
+            Studio Snapshot
+          </p>
+
+          <h2 className="mt-3 max-w-xl text-2xl font-black tracking-tight text-white">
+            Production status at a glance.
+          </h2>
+
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+            Track active work, review queue, upload queue, due tasks, and team
+            capacity from one dashboard.
+          </p>
+        </div>
+
+        <button
+          onClick={() => void onRefresh()}
+          disabled={loading}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-300 transition hover:bg-white/[0.07] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          title="Refresh dashboard"
+        >
+          <RefreshCw
+            className={["h-4 w-4", loading ? "animate-spin" : ""].join(" ")}
+          />
+        </button>
+      </div>
+
+      <div className="relative mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <SnapshotMetric label="Total Work" value={stats.total} />
+        <SnapshotMetric label="Active" value={stats.active} />
+        <SnapshotMetric label="Due Today" value={stats.dueToday} />
+        <SnapshotMetric label="Ready" value={stats.readyToUpload} />
+        <SnapshotMetric label="Team" value={stats.teamMembers} />
+      </div>
+    </section>
+  );
+}
+
+function SnapshotMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-black/20 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+      <p className="text-2xl font-black text-white">{value}</p>
+      <p className="mt-1 text-xs font-semibold text-slate-500">{label}</p>
+    </div>
+  );
+}
+
+function QuickHealthCard({
+  stats,
+}: {
+  stats: {
+    total: number;
+    active: number;
+    underReview: number;
+    needsRevision: number;
+    readyToUpload: number;
+  };
+}) {
+  const reviewPressure = stats.total
+    ? Math.round((stats.underReview / stats.total) * 100)
+    : 0;
+
+  const readyRate = stats.total
+    ? Math.round((stats.readyToUpload / stats.total) * 100)
+    : 0;
+
+  const revisionRate = stats.total
+    ? Math.round((stats.needsRevision / stats.total) * 100)
+    : 0;
+
+  return (
+    <section className="rounded-xl border border-white/10 bg-[#111318] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.18)]">
+      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+        Workflow Health
+      </p>
+
+      <h3 className="mt-3 text-xl font-black tracking-tight text-white">
+        Current balance
+      </h3>
+
+      <div className="mt-5 space-y-4">
+        <MiniProgress
+          label="Review Pressure"
+          value={reviewPressure}
+          className="bg-violet-500"
+        />
+        <MiniProgress
+          label="Ready Rate"
+          value={readyRate}
+          className="bg-emerald-500"
+        />
+        <MiniProgress
+          label="Revision Rate"
+          value={revisionRate}
+          className="bg-red-400"
+        />
+      </div>
+
+      <div className="mt-5 rounded-lg border border-white/10 bg-[#0B0D10] p-4">
+        <p className="text-sm font-bold leading-6 text-slate-400">
+          {stats.needsRevision > 0
+            ? "Some work needs fixes before it can move forward."
+            : stats.underReview > 0
+              ? "Submitted work is waiting for approval."
+              : stats.readyToUpload > 0
+                ? "Approved content is ready for upload."
+                : "No major production bottlenecks detected."}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function MiniProgress({
+  label,
+  value,
+  className,
+}: {
+  label: string;
+  value: number;
+  className: string;
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <span className="text-sm font-bold text-slate-300">{label}</span>
+        <span className="text-xs font-black text-slate-500">{value}%</span>
+      </div>
+
+      <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
+        <div
+          className={["h-full rounded-full", className].join(" ")}
+          style={{ width: `${value}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function StatCard({
   title,
   value,
@@ -339,11 +523,11 @@ function StatCard({
   title: string;
   value: number;
   label: string;
-  icon: React.ReactNode;
-  accent: "blue" | "violet" | "amber" | "red" | "emerald" | "slate";
+  icon: ReactNode;
+  accent: StatAccent;
 }) {
   return (
-    <article className="rounded-xl border border-white/10 bg-[#111318] p-4">
+    <article className="rounded-xl border border-white/10 bg-[#111318] p-4 shadow-[0_14px_34px_rgba(0,0,0,0.14)] transition hover:border-white/15 hover:bg-[#14171D]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-black uppercase tracking-wide text-slate-500">
@@ -378,15 +562,20 @@ function Panel({
   title: string;
   description: string;
   badge?: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-white/10 bg-[#111318] p-5">
+    <section className="rounded-xl border border-white/10 bg-[#111318] p-5 shadow-[0_14px_34px_rgba(0,0,0,0.14)]">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-lg font-black text-white">{title}</h3>
-          <p className="mt-1 text-sm text-slate-500">{description}</p>
+          <h3 className="text-lg font-black tracking-tight text-white">
+            {title}
+          </h3>
+
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            {description}
+          </p>
         </div>
 
         {action ? (
@@ -398,7 +587,7 @@ function Panel({
         ) : null}
       </div>
 
-      <div className="scroll-panel max-h-[260px] overflow-y-auto pr-1">
+      <div className="scroll-panel max-h-[280px] overflow-y-auto pr-1">
         {children}
       </div>
     </section>
@@ -415,7 +604,7 @@ function TaskRow({
   showUpdated?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-[#0B0D10] p-4">
+    <div className="rounded-xl border border-white/10 bg-[#0B0D10] p-4 transition hover:border-white/15 hover:bg-[#101318]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -582,6 +771,8 @@ function statusLabel(status: TodoDbStatus) {
       return "Approved";
     case "done":
       return "Ready";
+    case "posted":
+      return "Posted";
     default:
       return status;
   }
@@ -601,12 +792,14 @@ function statusStyle(status: TodoDbStatus) {
       return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
     case "done":
       return "border-green-500/20 bg-green-500/10 text-green-300";
+    case "posted":
+      return "border-blue-500/20 bg-blue-500/10 text-blue-300";
     default:
       return "border-white/10 bg-white/5 text-slate-300";
   }
 }
 
-function accentBox(accent: "blue" | "violet" | "amber" | "red" | "emerald" | "slate") {
+function accentBox(accent: StatAccent) {
   switch (accent) {
     case "blue":
       return "border-blue-500/20 bg-blue-500/10 text-blue-300";

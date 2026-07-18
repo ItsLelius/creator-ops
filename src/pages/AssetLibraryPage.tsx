@@ -286,15 +286,15 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Asset Library"
-        description="Each Brand Page has built-in Images, Text, and PDF sections."
+        description="Manage reusable image, text, and PDF assets for each brand page."
         onOpenSidebar={onOpenSidebar}
-        accent="cyan"
+        accent="blue"
         pills={[
           {
             icon: FolderOpen,
             value: pages.length,
-            label: "Page folders",
-            accent: "cyan",
+            label: "Folders",
+            accent: "blue",
           },
           {
             icon: FileImage,
@@ -312,7 +312,7 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
             icon: FileText,
             value: pdfCount,
             label: "PDF",
-            accent: "blue",
+            accent: "emerald",
           },
         ]}
       />
@@ -331,22 +331,27 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
         </div>
       )}
 
-      <section className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-[#111318] p-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
+      <section className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
+        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-[#111318] p-3.5">
+          <div className="mb-3 flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-sm font-black uppercase tracking-wide text-slate-400">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
                 Library
+              </p>
+
+              <h2 className="mt-2 text-lg font-black tracking-tight text-white">
+                Brand Folders
               </h2>
-              <p className="mt-1 text-xs text-slate-500">
-                Brand Page asset folders.
+
+              <p className="mt-1 text-xs font-medium text-slate-600">
+                Assets grouped by brand page.
               </p>
             </div>
 
             <button
               onClick={() => void loadData()}
               disabled={loading}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
               title="Refresh"
             >
               <RefreshCw
@@ -366,7 +371,7 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
                 description="Create Brand Pages first."
               />
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {folders.map((folder) => (
                   <FolderButton
                     key={folder.page.id}
@@ -381,15 +386,18 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
           </div>
         </aside>
 
-        <main className="flex min-h-0 min-w-0 flex-col rounded-xl border border-white/10 bg-[#111318] p-5">
+        <main className="flex min-h-0 min-w-0 flex-col rounded-xl border border-white/10 bg-[#111318] p-4">
           <div className="mb-4 flex shrink-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0">
-              <h2 className="truncate text-xl font-black text-white">
-                {selectedPage?.name ?? "No Folder Selected"} /{" "}
-                {selectedTab?.label}
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                Selected Folder
+              </p>
+
+              <h2 className="mt-2 truncate text-2xl font-black tracking-tight text-white">
+                {selectedPage?.name ?? "No Folder Selected"}
               </h2>
 
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm font-medium text-slate-500">
                 {selectedTab?.description}
               </p>
             </div>
@@ -400,7 +408,7 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
                   setCreateModalOpen(true);
                   setNotice(null);
                 }}
-                className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-black text-white transition hover:bg-blue-400"
+                className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-500/15 transition hover:bg-blue-400"
               >
                 <Plus className="h-4 w-4" />
                 Add {assetTypeLabel(selectedType)}
@@ -409,8 +417,8 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
           </div>
 
           <div className="mb-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#0B0D10] px-3 py-2.5">
-              <Search className="h-4 w-4 shrink-0 text-slate-500" />
+            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#0B0D10] px-3 py-2.5 transition focus-within:border-blue-500/60">
+              <Search className="h-4 w-4 shrink-0 text-slate-600" />
 
               <input
                 value={search}
@@ -419,11 +427,11 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
                   setSelectedAssetId(null);
                 }}
                 placeholder={`Search ${selectedTab?.label.toLowerCase()}...`}
-                className="w-full min-w-0 bg-transparent text-sm font-semibold text-slate-300 outline-none placeholder:text-slate-600"
+                className="w-full min-w-0 bg-transparent text-sm font-medium text-slate-300 outline-none placeholder:text-slate-700"
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-2 rounded-lg border border-white/10 bg-[#0B0D10] p-1">
+            <div className="grid grid-cols-3 gap-1 rounded-lg border border-white/10 bg-[#0B0D10] p-1">
               {assetTypeTabs.map((tab) => {
                 const active = selectedType === tab.type;
                 const count = assets.filter(
@@ -439,7 +447,7 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
                     className={[
                       "rounded-lg px-3 py-2 text-xs font-black transition",
                       active
-                        ? "bg-blue-500 text-white"
+                        ? "bg-blue-500 text-white shadow-lg shadow-blue-500/15"
                         : "text-slate-400 hover:bg-white/[0.05] hover:text-white",
                     ].join(" ")}
                   >
@@ -453,7 +461,7 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
             </div>
           </div>
 
-          <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
+          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
             <div className="scroll-panel min-h-0 overflow-y-auto pr-1">
               {loading ? (
                 <LoadingAssets />
@@ -464,7 +472,7 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
                   onAdd={() => setCreateModalOpen(true)}
                 />
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {filteredAssets.map((asset) => (
                     <AssetListItem
                       key={asset.id}
@@ -490,7 +498,7 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
               ) : (
                 <div className="flex flex-1 items-center justify-center p-6 text-center">
                   <div>
-                    <FileText className="mx-auto h-10 w-10 text-slate-600" />
+                    <FileText className="mx-auto h-10 w-10 text-slate-700" />
                     <p className="mt-3 font-semibold text-white">
                       Select an asset
                     </p>
@@ -556,33 +564,36 @@ function FolderButton({
     <button
       onClick={onClick}
       className={[
-        "group relative w-full overflow-hidden rounded-xl border p-4 text-left transition",
+        "group relative w-full rounded-lg border p-3 text-left transition",
         active
-          ? "border-cyan-500/45 bg-cyan-500/[0.065] ring-1 ring-cyan-500/30"
+          ? "border-blue-500/45 bg-blue-500/[0.08] ring-1 ring-blue-500/25"
           : "border-white/10 bg-[#0B0D10] hover:border-white/20 hover:bg-[#14171D]",
-        archived ? "opacity-70" : "",
+        archived ? "opacity-65" : "",
       ].join(" ")}
     >
-      <span
-        className={[
-          "absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b",
-          archived
-            ? "from-slate-500 via-slate-600 to-slate-700"
-            : "from-cyan-400 via-blue-500 to-violet-600",
-        ].join(" ")}
-      />
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-blue-300">
+          <FolderOpen className="h-5 w-5" />
+        </div>
 
-      <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-cyan-300">
-        <FolderOpen className="h-5 w-5" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="line-clamp-2 text-sm font-black leading-snug text-white">
+              {page.name}
+            </h3>
+
+            {archived && (
+              <span className="shrink-0 rounded-lg border border-slate-500/20 bg-slate-500/10 px-2 py-0.5 text-[10px] font-black text-slate-400">
+                Archived
+              </span>
+            )}
+          </div>
+
+          <p className="mt-2 text-xs font-semibold text-slate-500">
+            {count} asset{count === 1 ? "" : "s"}
+          </p>
+        </div>
       </div>
-
-      <h3 className="mt-3 line-clamp-2 text-sm font-black text-white">
-        {page.name}
-      </h3>
-
-      <p className="mt-1 text-xs font-semibold text-slate-500">
-        {count} asset{count === 1 ? "" : "s"}
-      </p>
     </button>
   );
 }
@@ -600,40 +611,40 @@ function AssetListItem({
     <button
       onClick={onClick}
       className={[
-        "group relative w-full overflow-hidden rounded-xl border p-4 text-left transition",
+        "group w-full rounded-lg border p-3 text-left transition",
         selected
-          ? "border-blue-500/45 bg-blue-500/[0.065] ring-1 ring-blue-500/30"
+          ? "border-blue-500/45 bg-blue-500/[0.08] ring-1 ring-blue-500/25"
           : "border-white/10 bg-[#0B0D10] hover:border-white/20 hover:bg-[#14171D]",
       ].join(" ")}
     >
-      <span className="absolute bottom-0 left-0 top-0 w-1 bg-gradient-to-b from-blue-400 via-cyan-500 to-violet-600" />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <span
+            className={[
+              "rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide",
+              assetTypeBadge(asset.type),
+            ].join(" ")}
+          >
+            {assetTypeLabel(asset.type)}
+          </span>
 
-      <div className="flex flex-wrap gap-2">
-        <span
-          className={[
-            "rounded-lg border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide",
-            assetTypeBadge(asset.type),
-          ].join(" ")}
-        >
-          {assetTypeLabel(asset.type)}
-        </span>
+          <h3 className="mt-3 line-clamp-2 text-sm font-black leading-snug text-white">
+            {asset.title}
+          </h3>
+
+          <p className="mt-2 line-clamp-1 text-xs font-semibold text-slate-600">
+            {asset.type === "text"
+              ? asset.content || "No text content."
+              : asset.file_name}
+          </p>
+        </div>
 
         {asset.type !== "text" && (
-          <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-black text-slate-300">
+          <span className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-black text-slate-400">
             {formatFileSize(asset.file_size)}
           </span>
         )}
       </div>
-
-      <h3 className="mt-3 line-clamp-2 text-sm font-black leading-snug text-white">
-        {asset.title}
-      </h3>
-
-      <p className="mt-2 line-clamp-1 text-xs font-semibold text-slate-500">
-        {asset.type === "text"
-          ? asset.content || "No text content."
-          : asset.file_name}
-      </p>
     </button>
   );
 }
@@ -677,7 +688,7 @@ function AssetViewer({
               )}
             </div>
 
-            <h3 className="mt-3 break-words text-2xl font-black leading-tight text-white">
+            <h3 className="mt-3 break-words text-2xl font-black leading-tight tracking-tight text-white">
               {asset.title}
             </h3>
 
@@ -702,7 +713,7 @@ function AssetViewer({
                 <a
                   href={asset.file_url}
                   download={asset.file_name}
-                  className="flex items-center justify-center gap-2 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-sm font-black text-cyan-300 transition hover:bg-cyan-500/20"
+                  className="flex items-center justify-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm font-black text-emerald-300 transition hover:bg-emerald-500/20"
                 >
                   <Download className="h-4 w-4" />
                   Download
@@ -750,7 +761,7 @@ function AssetViewer({
 
       <div className="scroll-panel min-h-0 flex-1 overflow-y-auto p-5">
         {asset.type === "pdf" && (
-          <div className="h-[calc(100vh-360px)] min-h-[560px] overflow-hidden rounded-xl border border-white/10 bg-[#07090C]">
+          <div className="h-[calc(100vh-360px)] min-h-[520px] overflow-hidden rounded-xl border border-white/10 bg-[#07090C]">
             {asset.file_url ? (
               <iframe
                 title={asset.title}
@@ -764,7 +775,7 @@ function AssetViewer({
         )}
 
         {asset.type === "image" && (
-          <div className="flex h-[calc(100vh-360px)] min-h-[560px] items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-[#07090C] p-4">
+          <div className="flex h-[calc(100vh-360px)] min-h-[520px] items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-[#07090C] p-4">
             {asset.file_url ? (
               <img
                 src={asset.file_url}
@@ -778,7 +789,7 @@ function AssetViewer({
         )}
 
         {asset.type === "text" && (
-          <div className="min-h-[560px] rounded-xl border border-white/10 bg-[#111318] p-7">
+          <div className="min-h-[520px] rounded-xl border border-white/10 bg-[#111318] p-6">
             <div className="mb-5 flex items-center justify-between gap-4">
               <p className="text-xs font-black uppercase tracking-wide text-slate-500">
                 Text Content
@@ -793,7 +804,7 @@ function AssetViewer({
               </button>
             </div>
 
-            <p className="whitespace-pre-wrap break-words text-[16px] leading-8 text-slate-100">
+            <p className="whitespace-pre-wrap break-words text-[15px] leading-8 text-slate-100">
               {asset.content || "Nothing added yet."}
             </p>
           </div>
@@ -921,7 +932,7 @@ function AssetFormModal(props: AssetFormModalProps) {
       <div className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-xl border border-white/10 bg-[#111318] shadow-2xl shadow-black/50">
         <div className="flex items-start justify-between gap-4 border-b border-white/10 p-6">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-300">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-300">
               {mode === "create" ? "New Asset" : "Edit Asset"}
             </p>
 
@@ -930,7 +941,7 @@ function AssetFormModal(props: AssetFormModalProps) {
             </h2>
 
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Images and PDFs use drag-and-drop. Text assets are stored as copyable text.
+              Upload image or PDF files, or save copyable text assets.
             </p>
           </div>
 
@@ -940,7 +951,7 @@ function AssetFormModal(props: AssetFormModalProps) {
             disabled={saving}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <X className="h-4.5 w-4.5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
@@ -948,7 +959,7 @@ function AssetFormModal(props: AssetFormModalProps) {
           onSubmit={handleSubmit}
           className="scroll-panel max-h-[calc(92vh-130px)] overflow-y-auto p-6"
         >
-          <div className="grid grid-cols-3 gap-2 rounded-lg border border-white/10 bg-[#0B0D10] p-1">
+          <div className="grid grid-cols-3 gap-1 rounded-lg border border-white/10 bg-[#0B0D10] p-1">
             {assetTypeTabs.map((tab) => {
               const active = form.type === tab.type;
 
@@ -1002,15 +1013,15 @@ function AssetFormModal(props: AssetFormModalProps) {
                 }
               }}
               className={[
-                "mt-5 flex min-h-[190px] cursor-pointer items-center justify-center rounded-xl border border-dashed p-6 text-center transition",
+                "mt-5 flex min-h-[180px] cursor-pointer items-center justify-center rounded-xl border border-dashed p-6 text-center transition",
                 dragActive
-                  ? "border-cyan-400 bg-cyan-500/10"
-                  : "border-white/15 bg-[#0B0D10] hover:border-cyan-500/40 hover:bg-cyan-500/[0.04]",
+                  ? "border-blue-400 bg-blue-500/10"
+                  : "border-white/15 bg-[#0B0D10] hover:border-blue-500/40 hover:bg-blue-500/[0.04]",
               ].join(" ")}
               onClick={() => fileInputRef.current?.click()}
             >
               <div>
-                <Upload className="mx-auto h-10 w-10 text-cyan-300" />
+                <Upload className="mx-auto h-10 w-10 text-blue-300" />
 
                 <p className="mt-3 text-lg font-black text-white">
                   {file
@@ -1065,7 +1076,7 @@ function AssetFormModal(props: AssetFormModalProps) {
                     contentPageId: event.target.value,
                   }))
                 }
-                className="w-full rounded-lg border border-white/10 bg-[#0B0D10] px-4 py-3.5 text-sm font-semibold text-white outline-none transition focus:border-cyan-500/70"
+                className="w-full rounded-lg border border-white/10 bg-[#0B0D10] px-4 py-3.5 text-sm font-semibold text-white outline-none transition focus:border-blue-500/70"
               >
                 <option value="">Choose brand page</option>
 
@@ -1190,7 +1201,7 @@ function ConfirmModal({
             disabled={busy}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <X className="h-4.5 w-4.5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
@@ -1242,7 +1253,7 @@ function TextField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-white/10 bg-[#0B0D10] px-4 py-3.5 text-sm font-semibold text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500/70"
+        className="w-full rounded-lg border border-white/10 bg-[#0B0D10] px-4 py-3.5 text-sm font-semibold text-white outline-none transition placeholder:text-slate-600 focus:border-blue-500/70"
       />
     </label>
   );
@@ -1272,7 +1283,7 @@ function TextArea({
         rows={rows}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full resize-y rounded-lg border border-white/10 bg-[#0B0D10] px-4 py-3.5 text-sm font-semibold leading-7 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-500/70"
+        className="w-full resize-y rounded-lg border border-white/10 bg-[#0B0D10] px-4 py-3.5 text-sm font-semibold leading-7 text-white outline-none transition placeholder:text-slate-600 focus:border-blue-500/70"
       />
     </label>
   );
@@ -1302,11 +1313,11 @@ function NoticeCard({
 
 function LoadingFolders() {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {Array.from({ length: 5 }).map((_, index) => (
         <div
           key={index}
-          className="h-[128px] animate-pulse rounded-xl border border-white/10 bg-[#0B0D10]"
+          className="h-[82px] animate-pulse rounded-lg border border-white/10 bg-[#0B0D10]"
         />
       ))}
     </div>
@@ -1315,11 +1326,11 @@ function LoadingFolders() {
 
 function LoadingAssets() {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {Array.from({ length: 5 }).map((_, index) => (
         <div
           key={index}
-          className="h-[112px] animate-pulse rounded-xl border border-white/10 bg-[#0B0D10]"
+          className="h-[104px] animate-pulse rounded-lg border border-white/10 bg-[#0B0D10]"
         />
       ))}
     </div>
@@ -1335,7 +1346,7 @@ function EmptySmallState({
 }) {
   return (
     <div className="rounded-xl border border-dashed border-white/10 bg-[#0B0D10] p-5 text-center">
-      <FolderOpen className="mx-auto h-8 w-8 text-slate-600" />
+      <FolderOpen className="mx-auto h-8 w-8 text-slate-700" />
       <p className="mt-3 text-sm font-semibold text-white">{title}</p>
       <p className="mt-1 text-xs text-slate-500">{description}</p>
     </div>
@@ -1354,7 +1365,7 @@ function EmptyAssetList({
   return (
     <div className="flex min-h-[260px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-[#0B0D10] p-8 text-center">
       <div>
-        <FileText className="mx-auto h-10 w-10 text-slate-600" />
+        <FileText className="mx-auto h-10 w-10 text-slate-700" />
         <p className="mt-3 font-semibold text-white">
           No {assetTypeLabel(type)} assets yet
         </p>
