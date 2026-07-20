@@ -6,6 +6,7 @@ import {
   type FormEvent,
 } from "react";
 import {
+  Check,
   Copy,
   Download,
   Edit3,
@@ -108,6 +109,9 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<AssetDbItem | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [previewAsset, setPreviewAsset] = useState<AssetDbItem | null>(null);
+  const [copiedAssetId, setCopiedAssetId] = useState("");
+  const copyResetRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
 
   async function loadData() {
     try {
@@ -143,6 +147,14 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
 
   useEffect(() => {
     void loadData();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetRef.current) {
+        window.clearTimeout(copyResetRef.current);
+      }
+    };
   }, []);
 
   const activePages = useMemo(() => {
@@ -187,9 +199,11 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
   }, [assets, selectedPageId, selectedType, search]);
 
   const selectedAsset =
-    filteredAssets.find((asset) => asset.id === selectedAssetId) ??
-    filteredAssets[0] ??
-    null;
+    filteredAssets.find((asset) => asset.id === selectedAssetId) ?? null;
+
+  const activePreviewAsset = previewAsset
+    ? assets.find((asset) => asset.id === previewAsset.id) ?? previewAsset
+    : null;
 
   const imageCount = assets.filter((asset) => asset.type === "image").length;
   const textCount = assets.filter((asset) => asset.type === "text").length;
@@ -205,6 +219,7 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
   function openPage(pageId: string) {
     setSelectedPageId(pageId);
     setSelectedAssetId(null);
+    setPreviewAsset(null);
     setSearch("");
     setNotice(null);
   }
@@ -212,6 +227,7 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
   function changeType(type: AssetType) {
     setSelectedType(type);
     setSelectedAssetId(null);
+    setPreviewAsset(null);
     setSearch("");
   }
 
@@ -264,6 +280,7 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
             item.type === asset.type,
         )?.id ?? null,
       );
+      setPreviewAsset(null);
       setConfirm(null);
 
       showNotice(`${assetTypeLabel(asset.type)} asset deleted.`);
@@ -277,13 +294,32 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
     }
   }
 
-  async function copyText(value: string, label: string) {
-    await navigator.clipboard.writeText(value);
-    showNotice(`${label} copied.`);
+  async function copyText(asset: AssetDbItem, value: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedAssetId(asset.id);
+      showNotice(`${label} copied.`);
+
+      if (copyResetRef.current) {
+        window.clearTimeout(copyResetRef.current);
+      }
+
+      copyResetRef.current = window.setTimeout(() => {
+        setCopiedAssetId("");
+      }, 1200);
+    } catch {
+      showNotice("Could not copy text. Please try again.", "error");
+    }
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className="flex h-full min-h-0 flex-col"
+      style={{
+        fontFamily:
+          '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+      }}
+    >
       <PageHeader
         title="Asset Library"
         description="Manage reusable image, text, and PDF assets for each brand page."
@@ -335,11 +371,11 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
         <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-[#111318] p-3.5">
           <div className="mb-3 flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
                 Library
               </p>
 
-              <h2 className="mt-2 text-lg font-black tracking-tight text-white">
+              <h2 className="mt-2 text-lg font-bold tracking-tight text-white">
                 Brand Folders
               </h2>
 
@@ -389,11 +425,11 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
         <main className="flex min-h-0 min-w-0 flex-col rounded-xl border border-white/10 bg-[#111318] p-4">
           <div className="mb-4 flex shrink-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
                 Selected Folder
               </p>
 
-              <h2 className="mt-2 truncate text-2xl font-black tracking-tight text-white">
+              <h2 className="mt-2 truncate text-2xl font-bold tracking-tight text-white">
                 {selectedPage?.name ?? "No Folder Selected"}
               </h2>
 
@@ -408,7 +444,7 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
                   setCreateModalOpen(true);
                   setNotice(null);
                 }}
-                className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-500/15 transition hover:bg-blue-400"
+                className="flex w-fit items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-500/15 transition hover:bg-blue-400"
               >
                 <Plus className="h-4 w-4" />
                 Add {assetTypeLabel(selectedType)}
@@ -445,7 +481,7 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
                     key={tab.type}
                     onClick={() => changeType(tab.type)}
                     className={[
-                      "rounded-lg px-3 py-2 text-xs font-black transition",
+                      "rounded-lg px-3 py-2 text-xs font-bold transition",
                       active
                         ? "bg-blue-500 text-white shadow-lg shadow-blue-500/15"
                         : "text-slate-400 hover:bg-white/[0.05] hover:text-white",
@@ -461,8 +497,19 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
             </div>
           </div>
 
-          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
-            <div className="scroll-panel min-h-0 overflow-y-auto pr-1">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0B0D10] p-4">
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-semibold text-slate-400">
+                {filteredAssets.length} {assetTypeLabel(selectedType)} asset
+                {filteredAssets.length === 1 ? "" : "s"} found
+              </p>
+
+              <p className="text-xs font-medium text-slate-600">
+                Click an asset to open a larger floating preview.
+              </p>
+            </div>
+
+            <div className="scroll-panel min-h-0 flex-1 overflow-y-auto pr-1">
               {loading ? (
                 <LoadingAssets />
               ) : filteredAssets.length === 0 ? (
@@ -472,43 +519,22 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
                   onAdd={() => setCreateModalOpen(true)}
                 />
               ) : (
-                <div className="space-y-2.5">
+                <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
                   {filteredAssets.map((asset) => (
                     <AssetListItem
                       key={asset.id}
                       asset={asset}
                       selected={selectedAsset?.id === asset.id}
-                      onClick={() => setSelectedAssetId(asset.id)}
+                      onClick={() => {
+                        setSelectedAssetId(asset.id);
+                        setPreviewAsset(asset);
+                        setNotice(null);
+                      }}
                     />
                   ))}
                 </div>
               )}
             </div>
-
-            <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0B0D10]">
-              {selectedAsset ? (
-                <AssetViewer
-                  asset={selectedAsset}
-                  isAdmin={isAdmin}
-                  busy={busyAssetId === selectedAsset.id}
-                  onEdit={setEditingAsset}
-                  onDelete={requestDeleteAsset}
-                  onCopy={copyText}
-                />
-              ) : (
-                <div className="flex flex-1 items-center justify-center p-6 text-center">
-                  <div>
-                    <FileText className="mx-auto h-10 w-10 text-slate-700" />
-                    <p className="mt-3 font-semibold text-white">
-                      Select an asset
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      Preview and actions will appear here.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </aside>
           </div>
         </main>
       </section>
@@ -541,6 +567,25 @@ export function AssetLibraryPage({ onOpenSidebar }: AssetLibraryPageProps) {
           confirm={confirm}
           busy={Boolean(busyAssetId)}
           onClose={() => setConfirm(null)}
+        />
+      )}
+
+      {activePreviewAsset && (
+        <AssetPreviewModal
+          asset={activePreviewAsset}
+          isAdmin={isAdmin}
+          busy={busyAssetId === activePreviewAsset.id}
+          copied={copiedAssetId === activePreviewAsset.id}
+          onClose={() => setPreviewAsset(null)}
+          onEdit={(asset) => {
+            setPreviewAsset(null);
+            setEditingAsset(asset);
+          }}
+          onDelete={(asset) => {
+            setPreviewAsset(null);
+            requestDeleteAsset(asset);
+          }}
+          onCopy={copyText}
         />
       )}
     </div>
@@ -578,12 +623,12 @@ function FolderButton({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="line-clamp-2 text-sm font-black leading-snug text-white">
+            <h3 className="line-clamp-2 text-sm font-bold leading-snug text-white">
               {page.name}
             </h3>
 
             {archived && (
-              <span className="shrink-0 rounded-lg border border-slate-500/20 bg-slate-500/10 px-2 py-0.5 text-[10px] font-black text-slate-400">
+              <span className="shrink-0 rounded-lg border border-slate-500/20 bg-slate-500/10 px-2 py-0.5 text-[10px] font-bold text-slate-400">
                 Archived
               </span>
             )}
@@ -609,50 +654,61 @@ function AssetListItem({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={[
-        "group w-full rounded-lg border p-3 text-left transition",
+        "group flex min-h-[150px] w-full flex-col rounded-lg border p-4 text-left transition duration-200",
         selected
-          ? "border-blue-500/45 bg-blue-500/[0.08] ring-1 ring-blue-500/25"
-          : "border-white/10 bg-[#0B0D10] hover:border-white/20 hover:bg-[#14171D]",
+          ? "border-blue-500/45 bg-blue-500/[0.08] ring-1 ring-blue-500/20"
+          : "border-white/10 bg-[#111318] hover:border-white/20 hover:bg-[#151820]",
       ].join(" ")}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <span
-            className={[
-              "rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide",
-              assetTypeBadge(asset.type),
-            ].join(" ")}
-          >
-            {assetTypeLabel(asset.type)}
-          </span>
-
-          <h3 className="mt-3 line-clamp-2 text-sm font-black leading-snug text-white">
-            {asset.title}
-          </h3>
-
-          <p className="mt-2 line-clamp-1 text-xs font-semibold text-slate-600">
-            {asset.type === "text"
-              ? asset.content || "No text content."
-              : asset.file_name}
-          </p>
-        </div>
+        <span
+          className={[
+            "rounded-lg border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide",
+            assetTypeBadge(asset.type),
+          ].join(" ")}
+        >
+          {assetTypeLabel(asset.type)}
+        </span>
 
         {asset.type !== "text" && (
-          <span className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-black text-slate-400">
+          <span className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-semibold text-slate-400">
             {formatFileSize(asset.file_size)}
           </span>
         )}
+      </div>
+
+      <h3 className="mt-4 line-clamp-2 text-base font-semibold leading-snug text-white">
+        {asset.title}
+      </h3>
+
+      <p className="mt-2 line-clamp-2 text-sm font-medium leading-6 text-slate-500">
+        {asset.type === "text"
+          ? asset.content || "No text content."
+          : asset.description || asset.file_name}
+      </p>
+
+      <div className="mt-auto flex items-center justify-between pt-4">
+        <p className="min-w-0 truncate text-xs font-medium text-slate-600">
+          {asset.type === "text" ? pageName(asset) : asset.file_name}
+        </p>
+
+        <span className="shrink-0 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs font-semibold text-slate-400 transition group-hover:border-blue-500/30 group-hover:text-blue-300">
+          Open
+        </span>
       </div>
     </button>
   );
 }
 
-function AssetViewer({
+function AssetPreviewModal({
   asset,
   isAdmin,
   busy,
+  copied,
+  onClose,
   onEdit,
   onDelete,
   onCopy,
@@ -660,164 +716,191 @@ function AssetViewer({
   asset: AssetDbItem;
   isAdmin: boolean;
   busy: boolean;
+  copied: boolean;
+  onClose: () => void;
   onEdit: (asset: AssetDbItem) => void;
   onDelete: (asset: AssetDbItem) => void;
-  onCopy: (value: string, label: string) => Promise<void>;
+  onCopy: (asset: AssetDbItem, value: string, label: string) => Promise<void>;
 }) {
   const canDownload = asset.type === "image" || asset.type === "pdf";
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b border-white/10 bg-[#111318] p-5">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap gap-2">
-              <span
-                className={[
-                  "rounded-lg border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide",
-                  assetTypeBadge(asset.type),
-                ].join(" ")}
-              >
-                {assetTypeLabel(asset.type)} Preview
-              </span>
-
-              {asset.type !== "text" && (
-                <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-black text-slate-300">
-                  {formatFileSize(asset.file_size)}
+    <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-white/10 bg-[#111318] shadow-2xl shadow-black/60">
+        <div className="shrink-0 border-b border-white/10 bg-[radial-gradient(circle_at_0%_0%,rgba(59,130,246,0.16),transparent_36%),linear-gradient(135deg,#111318,#0B0D10)] p-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={[
+                    "rounded-lg border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide",
+                    assetTypeBadge(asset.type),
+                  ].join(" ")}
+                >
+                  {assetTypeLabel(asset.type)} Preview
                 </span>
-              )}
+
+                {asset.type !== "text" && (
+                  <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-slate-300">
+                    {formatFileSize(asset.file_size)}
+                  </span>
+                )}
+              </div>
+
+              <h3 className="mt-3 break-words text-2xl font-semibold leading-tight tracking-tight text-white">
+                {asset.title}
+              </h3>
+
+              <p className="mt-2 break-words text-sm font-medium text-slate-500">
+                {asset.type === "text" ? pageName(asset) : asset.file_name}
+              </p>
             </div>
 
-            <h3 className="mt-3 break-words text-2xl font-black leading-tight tracking-tight text-white">
-              {asset.title}
-            </h3>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              {asset.file_url && canDownload && (
+                <>
+                  <a
+                    href={asset.file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-sm font-semibold text-blue-300 transition hover:bg-blue-500/20"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Open
+                  </a>
 
-            <p className="mt-2 break-words text-sm font-semibold text-slate-500">
-              {asset.type === "text" ? pageName(asset) : asset.file_name}
-            </p>
-          </div>
+                  <a
+                    href={asset.file_url}
+                    download={asset.file_name}
+                    className="flex items-center justify-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+                  >
+                    <Download className="h-4 w-4" />
+                    Download
+                  </a>
+                </>
+              )}
 
-          <div className="flex shrink-0 flex-wrap gap-2">
-            {asset.file_url && canDownload && (
-              <>
-                <a
-                  href={asset.file_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-sm font-black text-blue-300 transition hover:bg-blue-500/20"
+              {asset.type === "text" && (
+                <button
+                  type="button"
+                  onClick={() => void onCopy(asset, asset.content, "Text")}
+                  className={[
+                    "flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition",
+                    copied
+                      ? "border-emerald-500/25 bg-emerald-500/15 text-emerald-300"
+                      : "border-violet-500/20 bg-violet-500/10 text-violet-300 hover:bg-violet-500/20",
+                  ].join(" ")}
                 >
-                  <ExternalLink className="h-4 w-4" />
-                  Open
-                </a>
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {copied ? "Copied" : "Copy Text"}
+                </button>
+              )}
 
-                <a
-                  href={asset.file_url}
-                  download={asset.file_name}
-                  className="flex items-center justify-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm font-black text-emerald-300 transition hover:bg-emerald-500/20"
-                >
-                  <Download className="h-4 w-4" />
-                  Download
-                </a>
-              </>
-            )}
+              {isAdmin && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onEdit(asset)}
+                    className="flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/[0.07] hover:text-white"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                    Edit
+                  </button>
 
-            {asset.type === "text" && (
+                  <button
+                    type="button"
+                    onClick={() => onDelete(asset)}
+                    disabled={busy}
+                    className="flex items-center justify-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {busy ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                    Delete
+                  </button>
+                </>
+              )}
+
               <button
-                onClick={() => void onCopy(asset.content, "Text")}
-                className="flex items-center justify-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/10 px-3 py-2 text-sm font-black text-violet-300 transition hover:bg-violet-500/20"
+                type="button"
+                onClick={onClose}
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-400 transition hover:bg-white/[0.07] hover:text-white"
+                aria-label="Close preview"
               >
-                <Copy className="h-4 w-4" />
-                Copy Text
+                <X className="h-4 w-4" />
               </button>
-            )}
-
-            {isAdmin && (
-              <>
-                <button
-                  onClick={() => onEdit(asset)}
-                  className="flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-black text-slate-300 transition hover:bg-white/[0.07] hover:text-white"
-                >
-                  <Edit3 className="h-4 w-4" />
-                  Edit
-                </button>
-
-                <button
-                  onClick={() => onDelete(asset)}
-                  disabled={busy}
-                  className="flex items-center justify-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-black text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {busy ? (
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4" />
-                  )}
-                  Delete
-                </button>
-              </>
-            )}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="scroll-panel min-h-0 flex-1 overflow-y-auto p-5">
-        {asset.type === "pdf" && (
-          <div className="h-[calc(100vh-360px)] min-h-[520px] overflow-hidden rounded-xl border border-white/10 bg-[#07090C]">
-            {asset.file_url ? (
-              <iframe
-                title={asset.title}
-                src={asset.file_url}
-                className="h-full w-full bg-white"
-              />
-            ) : (
-              <UnavailablePreview />
-            )}
-          </div>
-        )}
-
-        {asset.type === "image" && (
-          <div className="flex h-[calc(100vh-360px)] min-h-[520px] items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-[#07090C] p-4">
-            {asset.file_url ? (
-              <img
-                src={asset.file_url}
-                alt={asset.title}
-                className="h-full max-h-full w-full max-w-full object-contain"
-              />
-            ) : (
-              <UnavailablePreview />
-            )}
-          </div>
-        )}
-
-        {asset.type === "text" && (
-          <div className="min-h-[520px] rounded-xl border border-white/10 bg-[#111318] p-6">
-            <div className="mb-5 flex items-center justify-between gap-4">
-              <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-                Text Content
-              </p>
-
-              <button
-                onClick={() => void onCopy(asset.content, "Text")}
-                className="flex items-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-xs font-black text-violet-300 transition hover:bg-violet-500/20"
-              >
-                <Copy className="h-3.5 w-3.5" />
-                Copy
-              </button>
+        <div className="scroll-panel min-h-0 flex-1 overflow-y-auto p-5">
+          {asset.type === "pdf" && (
+            <div className="h-[70vh] min-h-[560px] overflow-hidden rounded-xl border border-white/10 bg-[#07090C]">
+              {asset.file_url ? (
+                <iframe
+                  title={asset.title}
+                  src={asset.file_url}
+                  className="h-full w-full bg-white"
+                />
+              ) : (
+                <UnavailablePreview />
+              )}
             </div>
+          )}
 
-            <p className="whitespace-pre-wrap break-words text-[15px] leading-8 text-slate-100">
-              {asset.content || "Nothing added yet."}
+          {asset.type === "image" && (
+            <div className="flex h-[70vh] min-h-[560px] items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-[#07090C] p-4">
+              {asset.file_url ? (
+                <img
+                  src={asset.file_url}
+                  alt={asset.title}
+                  className="h-full max-h-full w-full max-w-full object-contain"
+                />
+              ) : (
+                <UnavailablePreview />
+              )}
+            </div>
+          )}
+
+          {asset.type === "text" && (
+            <div className="rounded-xl border border-white/10 bg-[#0B0D10] p-6">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  Text Content
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => void onCopy(asset, asset.content, "Text")}
+                  className={[
+                    "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold transition",
+                    copied
+                      ? "border-emerald-500/25 bg-emerald-500/15 text-emerald-300"
+                      : "border-violet-500/20 bg-violet-500/10 text-violet-300 hover:bg-violet-500/20",
+                  ].join(" ")}
+                >
+                  {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
+
+              <p className="whitespace-pre-wrap break-words text-[15px] leading-8 text-slate-100">
+                {asset.content || "Nothing added yet."}
+              </p>
+            </div>
+          )}
+
+          <div className="mt-4 rounded-xl border border-white/10 bg-[#0B0D10] p-5">
+            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">
+              Description
+            </p>
+
+            <p className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-300">
+              {asset.description || "No description added yet."}
             </p>
           </div>
-        )}
-
-        <div className="mt-4 rounded-xl border border-white/10 bg-[#111318] p-5">
-          <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500">
-            Description
-          </p>
-
-          <p className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-300">
-            {asset.description || "No description added yet."}
-          </p>
         </div>
       </div>
     </div>
@@ -932,11 +1015,11 @@ function AssetFormModal(props: AssetFormModalProps) {
       <div className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-xl border border-white/10 bg-[#111318] shadow-2xl shadow-black/50">
         <div className="flex items-start justify-between gap-4 border-b border-white/10 p-6">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-300">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-300">
               {mode === "create" ? "New Asset" : "Edit Asset"}
             </p>
 
-            <h2 className="mt-2 text-2xl font-black text-white">
+            <h2 className="mt-2 text-2xl font-bold text-white">
               {mode === "create" ? "Add asset" : "Update asset"}
             </h2>
 
@@ -976,7 +1059,7 @@ function AssetFormModal(props: AssetFormModalProps) {
                     setError("");
                   }}
                   className={[
-                    "rounded-lg px-3 py-2.5 text-sm font-black transition",
+                    "rounded-lg px-3 py-2.5 text-sm font-bold transition",
                     active
                       ? "bg-blue-500 text-white"
                       : "text-slate-400 hover:bg-white/[0.05] hover:text-white",
@@ -1023,7 +1106,7 @@ function AssetFormModal(props: AssetFormModalProps) {
               <div>
                 <Upload className="mx-auto h-10 w-10 text-blue-300" />
 
-                <p className="mt-3 text-lg font-black text-white">
+                <p className="mt-3 text-lg font-bold text-white">
                   {file
                     ? file.name
                     : `Drop ${assetTypeLabel(form.type)} here`}
@@ -1132,7 +1215,7 @@ function AssetFormModal(props: AssetFormModalProps) {
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-black text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-bold text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Cancel
             </button>
@@ -1140,7 +1223,7 @@ function AssetFormModal(props: AssetFormModalProps) {
             <button
               type="submit"
               disabled={saving}
-              className="flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {saving && <LoaderCircle className="h-4 w-4 animate-spin" />}
               {saving
@@ -1161,7 +1244,7 @@ function UnavailablePreview() {
     <div className="flex h-full items-center justify-center p-8 text-center">
       <div>
         <FileText className="mx-auto h-14 w-14 text-slate-600" />
-        <p className="mt-4 text-lg font-black text-white">
+        <p className="mt-4 text-lg font-bold text-white">
           Preview unavailable
         </p>
         <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
@@ -1187,11 +1270,11 @@ function ConfirmModal({
       <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#111318] p-6 shadow-2xl shadow-black/50">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
               Confirm Action
             </p>
 
-            <h3 className="mt-2 text-2xl font-black leading-tight text-white">
+            <h3 className="mt-2 text-2xl font-bold leading-tight text-white">
               {confirm.title}
             </h3>
           </div>
@@ -1213,7 +1296,7 @@ function ConfirmModal({
           <button
             onClick={onClose}
             disabled={busy}
-            className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-black text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-bold text-slate-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             Cancel
           </button>
@@ -1221,7 +1304,7 @@ function ConfirmModal({
           <button
             onClick={() => void confirm.onConfirm()}
             disabled={busy}
-            className="flex items-center justify-center gap-2 rounded-lg border border-red-500/25 bg-red-500/15 px-5 py-3 text-sm font-black text-red-200 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex items-center justify-center gap-2 rounded-lg border border-red-500/25 bg-red-500/15 px-5 py-3 text-sm font-bold text-red-200 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy && <LoaderCircle className="h-4 w-4 animate-spin" />}
             {busy ? "Working..." : confirm.actionLabel}
@@ -1305,7 +1388,7 @@ function NoticeCard({
 
   return (
     <div className={["rounded-xl border p-4", style].join(" ")}>
-      <p className="text-sm font-black capitalize">{title}</p>
+      <p className="text-sm font-bold capitalize">{title}</p>
       <p className="mt-1 text-sm font-semibold opacity-90">{children}</p>
     </div>
   );
@@ -1378,7 +1461,7 @@ function EmptyAssetList({
         {isAdmin && (
           <button
             onClick={onAdd}
-            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-black text-white transition hover:bg-blue-400"
+            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-400"
           >
             <Plus className="h-4 w-4" />
             Add {assetTypeLabel(type)}
